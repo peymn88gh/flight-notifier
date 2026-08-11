@@ -18,6 +18,18 @@ from app.domain.types import (
 from app.scrapers.links import validate_source_url
 
 DIGIT_TRANSLATION = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+UNAVAILABLE_STATUS_TERMS = (
+    "تکمیلظرفیت",
+    "ظرفیتتکمیل",
+    "کنسلشده",
+    "لغوشده",
+    "ناموجود",
+    "فروختهشد",
+    "soldout",
+    "unavailable",
+    "cancelled",
+    "canceled",
+)
 
 
 def _key_map(value: dict[str, Any]) -> dict[str, Any]:
@@ -54,6 +66,57 @@ def _decimal(value: Any) -> Decimal | None:
         return Decimal(raw)
     except InvalidOperation:
         return None
+
+
+def _normalized_status(value: Any) -> str:
+    return re.sub(
+        r"[\s_\-\u200c\u200f]+",
+        "",
+        str(value or "").translate(DIGIT_TRANSLATION).casefold(),
+    )
+
+
+def _contains_unavailable_status(value: Any) -> bool:
+    normalized = _normalized_status(value)
+    return any(term in normalized for term in UNAVAILABLE_STATUS_TERMS)
+
+
+def _flag(value: Any) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    normalized = _normalized_status(value)
+    if normalized in {"true", "1", "yes", "بله"}:
+        return True
+    if normalized in {"false", "0", "no", "خیر"}:
+        return False
+    return None
+
+
+def _candidate_is_unavailable(raw: dict[str, Any]) -> bool:
+    mapped = _key_map(raw)
+    availability = _first(
+        mapped,
+        ["isAvailable", "available", "isBookable", "bookable", "canBook", "isSellable"],
+    )
+    if availability is not None and _flag(availability) is False:
+        return True
+    disabled = _first(mapped, ["isDisabled", "disabled"])
+    if disabled is not None and _flag(disabled) is True:
+        return True
+    remaining = _decimal(
+        _first(mapped, ["seatsRemaining", "availableSeats", "remainingSeats"])
+    )
+    if remaining is not None and remaining <= 0:
+        return True
+    status = _first(
+        mapped,
+        ["status", "availabilityStatus", "flightStatus", "saleStatus", "statusText"],
+    )
+    return status is not None and _contains_unavailable_status(_text(status) or status)
+
+
+def _card_is_unavailable(card: dict[str, Any]) -> bool:
+    return bool(card.get("unavailable")) or _contains_unavailable_status(card.get("text"))
 
 
 def _datetime(value: Any, fallback_date: date, timezone: ZoneInfo) -> datetime | None:
@@ -122,6 +185,8 @@ class GenericFlightParser:
     def parse_dom_cards(self, cards: list[dict[str, Any]]) -> list[NormalizedItinerary]:
         results: list[NormalizedItinerary] = []
         for card in cards:
+            if _card_is_unavailable(card):
+                continue
             text_value = str(card.get("text", "")).translate(DIGIT_TRANSLATION)
             times = re.findall(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)", text_value)
             if not times:
@@ -171,6 +236,69 @@ class GenericFlightParser:
                 )
             )
         return results
+
+    def exclude_unavailable_dom(
+        self,
+        itineraries: list[NormalizedItinerary],
+        cards: list[dict[str, Any]],
+    ) -> list[NormalizedItinerary]:
+        unavailable: list[tuple[str, str, str, str]] = []
+        for card in cards:
+            if not _card_is_unavailable(card):
+                continue
+            text_value = str(card.get("text", "")).translate(DIGIT_TRANSLATION)
+            time_match = re.search(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)", text_value)
+            if not time_match:
+                continue
+            provider = _normalized_status(card.get("provider"))
+            provider_code = _normalized_status(card.get("provider_code"))
+            flight_match = re.search(r"\b([A-Z]{2,3})\s*[- ]?(\d{2,4})\b", text_value)
+            flight_number = (
+                _normalized_status("".join(flight_match.groups())) if flight_match else ""
+            )
+            unavailable.append(
+                (
+                    f"{int(time_match.group(1)):02d}:{time_match.group(2)}",
+                    provider,
+                    provider_code,
+                    flight_number,
+                )
+            )
+
+        if not unavailable:
+            return itineraries
+
+        filtered: list[NormalizedItinerary] = []
+        for itinerary in itineraries:
+            local_departure = itinerary.outbound.departure.astimezone(self.timezone)
+            departure_time = local_departure.strftime("%H:%M")
+            airline = _normalized_status(itinerary.outbound.airline)
+            flight_number = _normalized_status(itinerary.outbound.flight_number)
+            blocked = any(
+                departure_time == card_time
+                and (
+                    bool(card_flight and flight_number and card_flight == flight_number)
+                    or bool(
+                        provider
+                        and airline
+                        and (provider in airline or airline in provider)
+                    )
+                    or bool(
+                        provider_code
+                        and airline
+                        and (provider_code in airline or airline in provider_code)
+                    )
+                    or bool(
+                        provider_code
+                        and flight_number
+                        and flight_number.startswith(provider_code)
+                    )
+                )
+                for card_time, provider, provider_code, card_flight in unavailable
+            )
+            if not blocked:
+                filtered.append(itinerary)
+        return filtered
 
     def _candidate_dicts(self, value: Any) -> list[dict[str, Any]]:
         found: list[dict[str, Any]] = []
@@ -237,6 +365,8 @@ class GenericFlightParser:
         )
 
     def _parse_candidate(self, raw: dict[str, Any]) -> NormalizedItinerary | None:
+        if _candidate_is_unavailable(raw):
+            return None
         mapped = _key_map(raw)
         outbound_raw = _first(mapped, ["outbound", "departure", "outboundFlight", "goingFlight"])
         outbound = self._parse_leg(
@@ -292,7 +422,7 @@ class GenericFlightParser:
                     amount_toman=amount_toman,
                     price_kind=price_kind,
                     seats_remaining=_first(
-                        mapped, ["seatsRemaining", "capacity", "availableSeats"]
+                        mapped, ["seatsRemaining", "availableSeats", "remainingSeats"]
                     ),
                     booking_url=url,
                     observed_at=self.observed_at,

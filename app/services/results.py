@@ -91,6 +91,8 @@ async def reconcile_offer_states(
     for itinerary in batch.itineraries:
         for offer in itinerary.offers:
             key = _offer_key(itinerary, offer.source.value)
+            if key in seen:
+                continue
             payload = _offer_payload(itinerary, offer)
             seen.add(key)
             state = by_key.get(key)

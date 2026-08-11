@@ -58,6 +58,11 @@ class AlertRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def lock_user(self, user_id: uuid.UUID) -> None:
+        await self.session.execute(
+            select(User.id).where(User.id == user_id).with_for_update()
+        )
+
     async def create(self, user: User, criteria: AlertCriteria, expires_at: datetime) -> Alert:
         now = utc_now()
         alert = Alert(

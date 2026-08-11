@@ -2,6 +2,54 @@ import type { AlertRecord, Location } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+const FIELD_LABELS: Record<string, string> = {
+  "criteria.outbound_dates.start": "تاریخ رفت",
+  "criteria.outbound_dates.end": "پایان بازه رفت",
+  "criteria.return_dates.start": "تاریخ برگشت",
+  "criteria.return_dates.end": "پایان بازه برگشت",
+  "criteria.outbound_times.start": "شروع ساعت رفت",
+  "criteria.outbound_times.end": "پایان ساعت رفت",
+  "criteria.return_times.start": "شروع ساعت برگشت",
+  "criteria.return_times.end": "پایان ساعت برگشت"
+};
+
+type ValidationError = {
+  loc?: Array<string | number>;
+  msg?: string;
+};
+
+function formatApiError(body: unknown): string {
+  const fallback = "خطای ارتباط با سرور";
+  if (!body || typeof body !== "object" || !("detail" in body)) return fallback;
+
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (!Array.isArray(detail)) return fallback;
+
+  const messages = detail.map((item: unknown) => {
+    if (!item || typeof item !== "object") return String(item);
+    const error = item as ValidationError;
+    const path = Array.isArray(error.loc)
+      ? error.loc.filter((part) => part !== "body").join(".")
+      : "";
+    const label = FIELD_LABELS[path] || path;
+    const message = typeof error.msg === "string" ? error.msg : "مقدار نامعتبر است";
+    return label ? label + ": " + message : message;
+  });
+
+  return messages.filter(Boolean).join(" • ") || fallback;
+}
+
 function authHeaders(): HeadersInit {
   return {
     "Content-Type": "application/json",
@@ -15,15 +63,20 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers: { ...authHeaders(), ...(options.headers || {}) }
   });
   if (!response.ok) {
-    const body = await response.json().catch(() => ({ detail: "خطای ارتباط با سرور" }));
-    throw new Error(body.detail || "خطای ارتباط با سرور");
+    const body: unknown = await response.json().catch(() => null);
+    throw new ApiError(formatApiError(body), response.status);
   }
   return response.json() as Promise<T>;
 }
 
 export const api = {
   session: () =>
-    request<{ user_id: string; phone_masked: string; first_name?: string }>(
+    request<{
+      user_id: string;
+      phone_masked: string;
+      first_name?: string;
+      max_active_alerts: number;
+    }>(
       "/api/session",
       { method: "POST" }
     ),
@@ -37,4 +90,3 @@ export const api = {
   cancelAlert: (id: string) =>
     request<AlertRecord>(`/api/alerts/${id}/cancel`, { method: "POST" })
 };
-

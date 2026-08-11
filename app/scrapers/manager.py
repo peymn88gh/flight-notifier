@@ -28,21 +28,28 @@ class ScrapeBatch(BaseModel):
 
 def merge_itineraries(values: list[NormalizedItinerary]) -> list[NormalizedItinerary]:
     merged: dict[str, NormalizedItinerary] = {}
-    offer_keys: dict[str, set[tuple[str, str, str]]] = {}
     for itinerary in values:
         fingerprint = itinerary.fingerprint
         if fingerprint not in merged:
             merged[fingerprint] = itinerary.model_copy(deep=True)
-            offer_keys[fingerprint] = {
-                (offer.source.value, str(offer.amount_toman), str(offer.booking_url))
-                for offer in itinerary.offers
-            }
-            continue
+            merged[fingerprint].offers = []
         for offer in itinerary.offers:
-            key = (offer.source.value, str(offer.amount_toman), str(offer.booking_url))
-            if key not in offer_keys[fingerprint]:
-                merged[fingerprint].offers.append(offer)
-                offer_keys[fingerprint].add(key)
+            existing_index = next(
+                (
+                    index
+                    for index, existing in enumerate(merged[fingerprint].offers)
+                    if existing.source == offer.source
+                ),
+                None,
+            )
+            if existing_index is None:
+                merged[fingerprint].offers.append(offer.model_copy(deep=True))
+                continue
+            existing = merged[fingerprint].offers[existing_index]
+            existing_price = existing.amount_toman or Decimal("Infinity")
+            candidate_price = offer.amount_toman or Decimal("Infinity")
+            if candidate_price < existing_price:
+                merged[fingerprint].offers[existing_index] = offer.model_copy(deep=True)
     return sorted(
         merged.values(),
         key=lambda itinerary: (
@@ -89,7 +96,7 @@ class ScraperManager:
             },
             sort_keys=True,
         )
-        return "flight-search:" + hashlib.sha256(raw.encode()).hexdigest()
+        return "flight-search:v2:" + hashlib.sha256(raw.encode()).hexdigest()
 
     async def _cached(self, key: str) -> SiteSearchResult | None:
         try:

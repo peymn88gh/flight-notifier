@@ -14,7 +14,6 @@ from app.scrapers.parser import GenericFlightParser
 
 logger = logging.getLogger(__name__)
 
-
 class PlaywrightSiteAdapter:
     def __init__(self, source: SourceName, settings: Settings) -> None:
         self.source = source
@@ -67,6 +66,8 @@ class PlaywrightSiteAdapter:
         payloads: list[Any] = []
 
         async def capture_response(response) -> None:
+            if len(payloads) >= 50:
+                return
             content_type = (response.headers.get("content-type") or "").lower()
             if "json" not in content_type:
                 return
@@ -85,11 +86,26 @@ class PlaywrightSiteAdapter:
             await page.wait_for_timeout(7000)
             cards = await page.locator(
                 "[data-testid*='flight'], [class*='flight-card'], [class*='ticket-card'], "
-                "[class*='available-flight'], article"
+                "[class*='available-flight'], .available-card, article"
             ).evaluate_all(
                 """elements => elements.slice(0, 500).map(element => ({
                   text: element.innerText || '',
-                  url: element.querySelector('a[href]')?.href || location.href
+                  url: element.querySelector('a[href]')?.href || location.href,
+                  provider:
+                    element.querySelector('[data-test="provider"] .text-caption')?.textContent ||
+                    element.querySelector('[data-test="provider"]')?.innerText ||
+                    '',
+                  provider_code:
+                    element.querySelector('[data-test="provider"] img')?.getAttribute('alt') || '',
+                  unavailable:
+                    element.classList.contains('is-disabled') ||
+                    element.getAttribute('aria-disabled') === 'true' ||
+                    Boolean(
+                      Array.from(element.querySelectorAll('button')).find(button =>
+                        button.disabled &&
+                        (button.textContent || '').includes('انتخاب پرواز')
+                      )
+                    )
                 }))"""
             )
             parser = GenericFlightParser(
@@ -101,6 +117,7 @@ class PlaywrightSiteAdapter:
                 observed_at,
             )
             itineraries = parser.parse_payloads(payloads)
+            itineraries = parser.exclude_unavailable_dom(itineraries, cards)
             if not itineraries:
                 itineraries = parser.parse_dom_cards(cards)
             return SiteSearchResult(

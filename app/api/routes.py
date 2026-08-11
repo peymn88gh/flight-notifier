@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -24,7 +23,6 @@ from app.db.repositories import AlertRepository
 from app.domain.types import AlertCriteria, AlertStatus
 from app.services.queue import enqueue_alert
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -36,6 +34,8 @@ def _alert_response(alert) -> AlertResponse:
         expires_at=alert.expires_at,
         next_run_at=alert.next_run_at,
         created_at=alert.created_at,
+        last_run_at=alert.last_run_at,
+        run_count=alert.run_count,
     )
 
 
@@ -54,11 +54,12 @@ async def health() -> HealthResponse:
 
 
 @router.post("/api/session", response_model=SessionResponse, tags=["authentication"])
-async def create_session(user: CurrentUser) -> SessionResponse:
+async def create_session(user: CurrentUser, settings: AppSettings) -> SessionResponse:
     return SessionResponse(
         user_id=user.id,
         phone_masked=redact_phone(user.phone_e164),
         first_name=user.first_name,
+        max_active_alerts=settings.max_active_alerts_per_user,
     )
 
 
@@ -104,8 +105,15 @@ async def create_alert(
         raise HTTPException(status_code=422, detail="Outbound date range cannot be in the past")
 
     repository = AlertRepository(session)
+    await repository.lock_user(user.id)
     if await repository.active_count(user.id) >= settings.max_active_alerts_per_user:
-        raise HTTPException(status_code=429, detail="Active alert limit reached")
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"حداکثر {settings.max_active_alerts_per_user} پایش فعال مجاز است. "
+                "برای ادامه یکی را حذف کنید."
+            ),
+        )
     if await repository.created_today_count(user.id) >= settings.max_alerts_per_day:
         raise HTTPException(status_code=429, detail="Daily alert limit reached")
 

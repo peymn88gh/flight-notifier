@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -18,8 +19,10 @@ class Settings(BaseSettings):
     telegram_webhook_secret: str = "development-webhook-secret"
     telegram_init_data_max_age_seconds: int = 3600
     session_secret: str = "development-session-secret"
-    allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
-    admin_telegram_ids: list[int] = Field(default_factory=list)
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["http://localhost:5173"]
+    )
+    admin_telegram_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
 
     scraping_enabled: bool = False
     scraper_headless: bool = True
@@ -29,7 +32,7 @@ class Settings(BaseSettings):
     normal_poll_minutes: int = 15
     urgent_poll_minutes: int = 5
     urgent_window_hours: int = 24
-    max_active_alerts_per_user: int = 5
+    max_active_alerts_per_user: int = Field(default=2, ge=1)
     max_alerts_per_day: int = 30
 
     @field_validator("allowed_origins", mode="before")
@@ -46,6 +49,11 @@ class Settings(BaseSettings):
             return [int(part.strip()) for part in value.split(",") if part.strip()]
         return value
 
+    @field_validator("max_active_alerts_per_user")
+    @classmethod
+    def cap_active_alerts(cls, value: int) -> int:
+        return min(value, 2)
+
     @property
     def is_production(self) -> bool:
         return self.app_env.lower() == "production"
@@ -54,4 +62,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-

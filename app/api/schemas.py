@@ -12,6 +12,7 @@ class SessionResponse(BaseModel):
     user_id: uuid.UUID
     phone_masked: str
     first_name: str | None
+    max_active_alerts: int
 
 
 class AlertCreate(BaseModel):
@@ -25,6 +26,8 @@ class AlertResponse(BaseModel):
     expires_at: datetime
     next_run_at: datetime
     created_at: datetime
+    last_run_at: datetime | None
+    run_count: int
 
 
 class LocationResponse(BaseModel):
@@ -38,4 +41,3 @@ class LocationResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     status: str = "ok"
-
