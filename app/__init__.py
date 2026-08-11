@@ -1,0 +1,2 @@
+"""Flight notifier application package."""
+
