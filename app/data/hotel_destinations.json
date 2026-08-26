@@ -98,6 +98,330 @@
     }
   },
   {
+    "code": "TBZ",
+    "city_fa": "تبریز",
+    "city_en": "Tabriz",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-tabriz",
+      "trip": "tabriz",
+      "respina24": "tabriz",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "AWZ",
+    "city_fa": "اهواز",
+    "city_en": "Ahvaz",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-ahvaz",
+      "trip": "ahvaz",
+      "respina24": "ahvaz",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "BND",
+    "city_fa": "بندرعباس",
+    "city_en": "Bandar Abbas",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-bandarabbas",
+      "trip": "bandarabbas",
+      "respina24": "bandarabbas",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "RAS",
+    "city_fa": "رشت",
+    "city_en": "Rasht",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-rasht",
+      "trip": "rasht",
+      "respina24": "rasht",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "AZD",
+    "city_fa": "یزد",
+    "city_en": "Yazd",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-yazd",
+      "trip": "yazd",
+      "respina24": "yazd",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "KER",
+    "city_fa": "کرمان",
+    "city_en": "Kerman",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-kerman",
+      "trip": "kerman",
+      "respina24": "kerman",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "KSH",
+    "city_fa": "کرمانشاه",
+    "city_en": "Kermanshah",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-kermanshah",
+      "trip": "kermanshah",
+      "respina24": "kermanshah",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "ZAH",
+    "city_fa": "زاهدان",
+    "city_en": "Zahedan",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-zahedan",
+      "trip": "zahedan",
+      "respina24": "zahedan",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "ABD",
+    "city_fa": "آبادان",
+    "city_en": "Abadan",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-abadan",
+      "trip": "abadan",
+      "respina24": "abadan",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "BUZ",
+    "city_fa": "بوشهر",
+    "city_en": "Bushehr",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-bushehr",
+      "trip": "bushehr",
+      "respina24": "bushehr",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "SRY",
+    "city_fa": "ساری",
+    "city_en": "Sari",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-sari",
+      "trip": "sari",
+      "respina24": "sari",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "GBT",
+    "city_fa": "گرگان",
+    "city_en": "Gorgan",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-gorgan",
+      "trip": "gorgan",
+      "respina24": "gorgan",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "ADU",
+    "city_fa": "اردبیل",
+    "city_en": "Ardabil",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-ardabil",
+      "trip": "ardabil",
+      "respina24": "ardabil",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "OMH",
+    "city_fa": "ارومیه",
+    "city_en": "Urmia",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [
+      "اورمیه"
+    ],
+    "slugs": {
+      "alibaba": "ir-urmia",
+      "trip": "urmia",
+      "respina24": "urmia",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "CQD",
+    "city_fa": "شهرکرد",
+    "city_en": "Shahrekord",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-shahrekord",
+      "trip": "shahrekord",
+      "respina24": "shahrekord",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "HDM",
+    "city_fa": "همدان",
+    "city_en": "Hamadan",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-hamadan",
+      "trip": "hamadan",
+      "respina24": "hamadan",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "LRR",
+    "city_fa": "لار",
+    "city_en": "Lar",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-lar",
+      "trip": "lar",
+      "respina24": "lar",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "PGU",
+    "city_fa": "عسلویه",
+    "city_en": "Asaluyeh",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [
+      "پارسیان"
+    ],
+    "slugs": {
+      "alibaba": "ir-asaluyeh",
+      "trip": "asaluyeh",
+      "respina24": "asaluyeh",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "DEF",
+    "city_fa": "دزفول",
+    "city_en": "Dezful",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-dezful",
+      "trip": "dezful",
+      "respina24": "dezful",
+      "snapptrip": null
+    }
+  },
+  {
+    "code": "ACZ",
+    "city_fa": "زابل",
+    "city_en": "Zabol",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ir-zabol",
+      "trip": "zabol",
+      "respina24": "zabol",
+      "snapptrip": null
+    }
+  },
+  {
     "code": "IST",
     "city_fa": "استانبول",
     "city_en": "Istanbul",

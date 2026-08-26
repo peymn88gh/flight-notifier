@@ -102,55 +102,105 @@ function DateField({
   );
 }
 
-function LocationField({
-  label,
-  value,
-  onChange,
-  locations
-}: {
+type SearchableOption = {
+  code: string;
   label: string;
-  value: string;
-  onChange: (value: string) => void;
-  locations: Location[];
-}) {
-  return (
-    <label className="field">
-      <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} required>
-        <option value="">انتخاب شهر یا فرودگاه</option>
-        {locations.map((location) => (
-          <option key={location.code} value={location.code}>
-            {location.city_fa} — {location.airport_fa} ({location.code})
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+  searchText: string;
+};
+
+function locationOptions(locations: Location[]): SearchableOption[] {
+  return locations.map((location) => ({
+    code: location.code,
+    label: `${location.city_fa} — ${location.airport_fa} (${location.code})`,
+    searchText: [
+      location.code,
+      location.city_fa,
+      location.city_en,
+      location.airport_fa,
+      location.airport_en,
+      ...location.aliases
+    ]
+      .join(" ")
+      .toLowerCase()
+  }));
 }
 
-function HotelDestinationField({
+function hotelDestinationOptions(destinations: HotelDestination[]): SearchableOption[] {
+  return destinations.map((destination) => ({
+    code: destination.code,
+    label: `${destination.city_fa} — ${destination.country_fa}`,
+    searchText: [
+      destination.code,
+      destination.city_fa,
+      destination.city_en,
+      destination.country_fa,
+      destination.country_en,
+      ...destination.aliases
+    ]
+      .join(" ")
+      .toLowerCase()
+  }));
+}
+
+function SearchableSelect({
   label,
   value,
   onChange,
-  destinations
+  options,
+  placeholder
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  destinations: HotelDestination[];
+  options: SearchableOption[];
+  placeholder: string;
 }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const selected = useMemo(() => options.find((option) => option.code === value), [options, value]);
+
+  const filtered = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const values = needle ? options.filter((option) => option.searchText.includes(needle)) : options;
+    return values.slice(0, 40);
+  }, [options, query]);
+
   return (
-    <label className="field">
+    <div className="field combobox">
       <span>{label}</span>
-      <select value={value} onChange={(event) => onChange(event.target.value)} required>
-        <option value="">انتخاب شهر</option>
-        {destinations.map((destination) => (
-          <option key={destination.code} value={destination.code}>
-            {destination.city_fa} — {destination.country_fa}
-          </option>
-        ))}
-      </select>
-    </label>
+      <input
+        type="text"
+        value={open ? query : selected?.label ?? ""}
+        placeholder={placeholder}
+        autoComplete="off"
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        onChange={(event) => setQuery(event.target.value)}
+        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+      />
+      {open && (
+        <ul className="combobox-list" role="listbox">
+          {filtered.length === 0 && <li className="combobox-empty">نتیجه‌ای یافت نشد</li>}
+          {filtered.map((option) => (
+            <li key={option.code} role="option" aria-selected={option.code === value}>
+              <button
+                type="button"
+                className={option.code === value ? "selected" : ""}
+                onClick={() => {
+                  onChange(option.code);
+                  setOpen(false);
+                  setQuery("");
+                }}
+              >
+                {option.label}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -220,6 +270,12 @@ export default function App() {
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [hotelSubmitting, setHotelSubmitting] = useState(false);
+
+  const locationOptionsList = useMemo(() => locationOptions(locations), [locations]);
+  const hotelDestinationOptionsList = useMemo(
+    () => hotelDestinationOptions(hotelDestinations),
+    [hotelDestinations]
+  );
 
   const activeAlerts = useMemo(
     () => alerts.filter((alert) => alert.status === "active"),
@@ -451,8 +507,20 @@ export default function App() {
         </div>
 
         <section className="grid two">
-          <LocationField label="مبدأ" value={origin} onChange={setOrigin} locations={locations} />
-          <LocationField label="مقصد" value={destination} onChange={setDestination} locations={locations} />
+          <SearchableSelect
+            label="مبدأ"
+            value={origin}
+            onChange={setOrigin}
+            options={locationOptionsList}
+            placeholder="جستجوی شهر یا فرودگاه"
+          />
+          <SearchableSelect
+            label="مقصد"
+            value={destination}
+            onChange={setDestination}
+            options={locationOptionsList}
+            placeholder="جستجوی شهر یا فرودگاه"
+          />
         </section>
 
         <div className="section-heading">
@@ -492,11 +560,12 @@ export default function App() {
 
       {activeTab === "hotel" && (
       <form className="card form-card" onSubmit={submitHotel}>
-        <HotelDestinationField
+        <SearchableSelect
           label="مقصد"
           value={hotelDestination}
           onChange={setHotelDestination}
-          destinations={hotelDestinations}
+          options={hotelDestinationOptionsList}
+          placeholder="جستجوی شهر"
         />
 
         <div className="section-heading">

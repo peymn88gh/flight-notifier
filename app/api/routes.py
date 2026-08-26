@@ -109,7 +109,7 @@ async def locations(q: str = "") -> list[LocationResponse]:
                 ]
             ).casefold()
         ]
-    return [LocationResponse.model_validate(item) for item in values[:30]]
+    return [LocationResponse.model_validate(item) for item in values]
 
 
 @router.get(
@@ -135,7 +135,7 @@ async def hotel_destinations(q: str = "") -> list[HotelDestinationResponse]:
                 ]
             ).casefold()
         ]
-    return [HotelDestinationResponse.model_validate(item) for item in values[:30]]
+    return [HotelDestinationResponse.model_validate(item) for item in values]
 
 
 @router.post(
