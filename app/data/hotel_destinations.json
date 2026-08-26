@@ -5,12 +5,14 @@
     "city_en": "Tehran",
     "country_fa": "ایران",
     "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
     "aliases": [],
     "slugs": {
-      "alibaba": "tehran",
+      "alibaba": "ir-tehran",
       "trip": "tehran",
       "respina24": "tehran",
-      "snapptrip": "تهران"
+      "snapptrip": null
     }
   },
   {
@@ -19,12 +21,16 @@
     "city_en": "Mashhad",
     "country_fa": "ایران",
     "country_en": "Iran",
-    "aliases": ["مشهد مقدس"],
+    "country_code": "ir",
+    "is_domestic": true,
+    "aliases": [
+      "مشهد مقدس"
+    ],
     "slugs": {
-      "alibaba": "mashhad",
+      "alibaba": "ir-mashhad",
       "trip": "mashhad",
       "respina24": "mashhad",
-      "snapptrip": "مشهد"
+      "snapptrip": null
     }
   },
   {
@@ -33,12 +39,14 @@
     "city_en": "Kish",
     "country_fa": "ایران",
     "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
     "aliases": [],
     "slugs": {
-      "alibaba": "kish",
+      "alibaba": "ir-kish",
       "trip": "kish",
       "respina24": "kish",
-      "snapptrip": "کیش"
+      "snapptrip": null
     }
   },
   {
@@ -47,12 +55,14 @@
     "city_en": "Qeshm",
     "country_fa": "ایران",
     "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
     "aliases": [],
     "slugs": {
-      "alibaba": "qeshm",
+      "alibaba": "ir-qeshm",
       "trip": "qeshm",
       "respina24": "qeshm",
-      "snapptrip": "قشم"
+      "snapptrip": null
     }
   },
   {
@@ -61,12 +71,14 @@
     "city_en": "Shiraz",
     "country_fa": "ایران",
     "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
     "aliases": [],
     "slugs": {
-      "alibaba": "shiraz",
+      "alibaba": "ir-shiraz",
       "trip": "shiraz",
       "respina24": "shiraz",
-      "snapptrip": "شیراز"
+      "snapptrip": null
     }
   },
   {
@@ -75,12 +87,14 @@
     "city_en": "Isfahan",
     "country_fa": "ایران",
     "country_en": "Iran",
+    "country_code": "ir",
+    "is_domestic": true,
     "aliases": [],
     "slugs": {
-      "alibaba": "isfahan",
+      "alibaba": "ir-isfahan",
       "trip": "isfahan",
       "respina24": "isfahan",
-      "snapptrip": "اصفهان"
+      "snapptrip": null
     }
   },
   {
@@ -89,12 +103,16 @@
     "city_en": "Istanbul",
     "country_fa": "ترکیه",
     "country_en": "Turkey",
-    "aliases": ["استانبول ترکیه"],
+    "country_code": "tr",
+    "is_domestic": false,
+    "aliases": [
+      "استانبول ترکیه"
+    ],
     "slugs": {
       "alibaba": "tr-istanbul",
       "trip": "istanbul",
       "respina24": "istanbul",
-      "snapptrip": "استانبول"
+      "snapptrip": "istanbul-tr"
     }
   },
   {
@@ -103,12 +121,14 @@
     "city_en": "Antalya",
     "country_fa": "ترکیه",
     "country_en": "Turkey",
+    "country_code": "tr",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "tr-antalya",
       "trip": "antalya",
       "respina24": "antalya",
-      "snapptrip": "آنتالیا"
+      "snapptrip": "antalya-tr"
     }
   },
   {
@@ -117,12 +137,14 @@
     "city_en": "Dubai",
     "country_fa": "امارات متحده عربی",
     "country_en": "United Arab Emirates",
+    "country_code": "ae",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "ae-dubai",
       "trip": "dubai",
       "respina24": "dubai",
-      "snapptrip": "دبی"
+      "snapptrip": "dubai-ae"
     }
   },
   {
@@ -131,12 +153,14 @@
     "city_en": "Doha",
     "country_fa": "قطر",
     "country_en": "Qatar",
+    "country_code": "qa",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "qa-doha",
       "trip": "doha",
       "respina24": "doha",
-      "snapptrip": "دوحه"
+      "snapptrip": "doha-qa"
     }
   },
   {
@@ -145,12 +169,14 @@
     "city_en": "Baku",
     "country_fa": "آذربایجان",
     "country_en": "Azerbaijan",
+    "country_code": "az",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "az-baku",
       "trip": "baku",
       "respina24": "baku",
-      "snapptrip": "باکو"
+      "snapptrip": "baku-az"
     }
   },
   {
@@ -159,12 +185,14 @@
     "city_en": "Yerevan",
     "country_fa": "ارمنستان",
     "country_en": "Armenia",
+    "country_code": "am",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "am-yerevan",
       "trip": "yerevan",
       "respina24": "yerevan",
-      "snapptrip": "ایروان"
+      "snapptrip": "yerevan-am"
     }
   },
   {
@@ -173,12 +201,14 @@
     "city_en": "Tbilisi",
     "country_fa": "گرجستان",
     "country_en": "Georgia",
+    "country_code": "ge",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "ge-tbilisi",
       "trip": "tbilisi",
       "respina24": "tbilisi",
-      "snapptrip": "تفلیس"
+      "snapptrip": "tbilisi-ge"
     }
   },
   {
@@ -187,12 +217,14 @@
     "city_en": "Muscat",
     "country_fa": "عمان",
     "country_en": "Oman",
+    "country_code": "om",
+    "is_domestic": false,
     "aliases": [],
     "slugs": {
       "alibaba": "om-muscat",
       "trip": "muscat",
       "respina24": "muscat",
-      "snapptrip": "مسقط"
+      "snapptrip": "muscat-om"
     }
   }
 ]

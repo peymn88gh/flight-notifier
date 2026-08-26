@@ -24,11 +24,9 @@ def _destinations() -> dict[str, dict]:
     return {item["code"]: item for item in values}
 
 
-def destination_slug(source: HotelSourceName, destination_code: str) -> str | None:
+def destination_city_fa(destination_code: str) -> str | None:
     destination = _destinations().get(destination_code)
-    if not destination:
-        return None
-    return destination.get("slugs", {}).get(source.value)
+    return destination.get("city_fa") if destination else None
 
 
 def checkout_date(checkin: date, nights: int) -> date:
@@ -40,59 +38,78 @@ def build_hotel_search_url(
     criteria: HotelCriteria,
     checkin: date,
 ) -> str | None:
-    """Best-effort search URL per site, mirroring app/scrapers/links.py.
+    """Real, verified search URLs per site (checked live against each site on 2026-08-26).
 
-    Slugs come from app/data/hotel_destinations.json and were captured from each
-    site's live URL structure at write time; they are not guaranteed to stay
-    correct if a site restructures its paths. The scraper does not depend on the
-    URL itself being exact - it captures first-party JSON/DOM from whatever page
-    loads, and fails closed if nothing verifiable is found.
+    Unlike app/scrapers/links.py's flight URLs, most hotel sites here do NOT accept a
+    plain query-string deep link into a working results page - each site's own quirks
+    are handled explicitly below rather than guessed generically:
+
+    - alibaba.ir: `departing`/`returning` on the existing slug path works directly.
+    - respina24.ir: domestic and international hotels are two different site sections
+      with different path shapes and different date-param names.
+    - snapptrip.com: only international hotels have a confirmed working path
+      (`/international-hotel/{city}-{country_code}`); domestic slugs are left null
+      since no working pattern was verified, and this returns None for those.
+    - trip.ir: has no query-string deep link at all - its search box requires picking
+      a destination from a live autocomplete, which resolves to an internal numeric
+      city id you cannot construct from a slug. The plain landing page is still a
+      real, working page, just without dates pre-filled; PlaywrightHotelAdapter drives
+      the actual interactive search separately (see hotel_adapters.py).
     """
-    slug = destination_slug(source, criteria.destination)
-    if not slug:
+    destination = _destinations().get(criteria.destination)
+    if not destination:
         return None
+    slug = destination.get("slugs", {}).get(source.value)
     checkout = checkout_date(checkin, criteria.nights)
-    occupancy = criteria.occupancy
+    occupants = criteria.occupancy.adults + criteria.occupancy.children
 
     if source == HotelSourceName.ALIBABA:
-        query = {
-            "checkin": checkin.isoformat(),
-            "checkout": checkout.isoformat(),
-            "room": criteria.rooms,
-            "adult": occupancy.adults,
-            "child": occupancy.children,
-        }
+        if not slug:
+            return None
+        query = {"departing": checkin.isoformat(), "returning": checkout.isoformat()}
         return f"https://www.alibaba.ir/hotel/{slug}?{urlencode(query)}"
 
     if source == HotelSourceName.TRIP:
-        query = {
-            "checkin": checkin.isoformat(),
-            "checkout": checkout.isoformat(),
-            "rooms": criteria.rooms,
-            "adults": occupancy.adults,
-            "children": occupancy.children,
-        }
-        return f"https://www.trip.ir/hotel/{slug}?{urlencode(query)}"
+        if not slug:
+            return None
+        return f"https://www.trip.ir/hotel/{slug}"
 
     if source == HotelSourceName.RESPINA24:
+        if destination.get("is_domestic", True):
+            if not slug:
+                return None
+            query = {
+                "departing": checkin.isoformat(),
+                "returning": checkout.isoformat(),
+                "adults": occupants,
+                "rooms": criteria.rooms,
+                "childages": "",
+            }
+            return f"https://respina24.ir/hotel/{slug}?{urlencode(query)}"
+        country_en = destination.get("country_en")
+        city_en = destination.get("city_en")
+        if not country_en or not city_en:
+            return None
         query = {
             "checkin": checkin.isoformat(),
             "checkout": checkout.isoformat(),
-            "room": criteria.rooms,
-            "adult": occupancy.adults,
-            "child": occupancy.children,
+            "adults": occupants,
+            "rooms": criteria.rooms,
+            "childages": "",
+            "nationality": "IR",
         }
-        return f"https://respina24.ir/hotel/{slug}?{urlencode(query)}"
+        path = f"{quote(country_en)}/{quote(city_en)}"
+        return f"https://respina24.ir/internationalhotel/search/{path}?{urlencode(query)}"
 
     if source == HotelSourceName.SNAPPTRIP:
+        if not slug:
+            return None
         query = {
-            "checkin": checkin.isoformat(),
-            "checkout": checkout.isoformat(),
-            "rooms": criteria.rooms,
-            "adults": occupancy.adults,
+            "date_from": checkin.isoformat(),
+            "date_to": checkout.isoformat(),
+            "occupants": occupants,
         }
-        path = quote(f"رزرو-هتل/{slug}")
-        return f"https://www.snapptrip.com/{path}?{urlencode(query)}"
+        return f"https://www.snapptrip.com/international-hotel/{slug}?{urlencode(query)}"
 
     raise ValueError(f"Unsupported hotel source: {source}")
 

@@ -1,7 +1,8 @@
 :root {
   font-family: "Vazirmatn Variable", Vazirmatn, Tahoma, system-ui, sans-serif;
-  color: var(--tg-theme-text-color, #153247);
-  background: var(--tg-theme-bg-color, #edf4f5);
+  color-scheme: light;
+  color: #153247;
+  background: #edf4f5;
   font-synthesis: none;
   --ink: #153247;
   --muted: #6f828e;
@@ -10,7 +11,7 @@
   --teal-dark: #10776e;
   --teal-soft: #dff5f0;
   --line: #d8e4e7;
-  --surface: var(--tg-theme-secondary-bg-color, #ffffff);
+  --surface: #ffffff;
   --danger: #bf3f4a;
   --shadow: 0 14px 38px rgba(17, 48, 69, .09);
 }
@@ -247,6 +248,7 @@ button:disabled { cursor: not-allowed; }
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fbfdfd;
+  color: var(--ink);
 }
 
 .stepper span { font-weight: 700; }

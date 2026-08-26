@@ -9,7 +9,11 @@ from playwright.async_api import Browser, Playwright, async_playwright
 
 from app.core.config import Settings
 from app.domain.types import HotelCriteria, HotelSearchResult, HotelSourceName
-from app.scrapers.hotel_links import build_hotel_search_url
+from app.scrapers.hotel_links import (
+    build_hotel_search_url,
+    destination_city_fa,
+    validate_hotel_source_url,
+)
 from app.scrapers.hotel_parser import GenericHotelParser
 
 logger = logging.getLogger(__name__)
@@ -36,6 +40,34 @@ class PlaywrightHotelAdapter:
             await self._browser.close()
         if self._playwright:
             await self._playwright.stop()
+
+    async def _run_interactive_search(self, page, criteria: HotelCriteria) -> None:
+        """trip.ir has no query-string deep link into results (see hotel_links.py); its
+        destination field resolves to an internal numeric city id only through its own
+        live autocomplete, so the actual search has to be driven like a real visitor.
+        Verified against the live site on 2026-08-26 for several cities. Any failure here
+        just leaves the page on its landing state, which parse_payloads/parse_dom_cards
+        will correctly find nothing on rather than fabricate a result.
+        """
+        city_fa = destination_city_fa(criteria.destination)
+        if not city_fa:
+            return
+        destination_input = page.locator(
+            "input[placeholder*='مقصد'], input[placeholder*='شهر']"
+        ).first
+        await destination_input.click(timeout=8000)
+        await destination_input.fill(city_fa)
+        await page.wait_for_timeout(1500)
+        suggestion = page.locator("li, [role='option'], [role='listitem']").filter(
+            has_text=city_fa
+        )
+        if await suggestion.count() == 0:
+            return
+        await suggestion.first.click(timeout=8000)
+        await page.wait_for_timeout(500)
+        search_button = page.locator("button:has-text('جستجو')").first
+        await search_button.click(timeout=8000)
+        await page.wait_for_timeout(4000)
 
     async def search(self, criteria: HotelCriteria, checkin: date) -> HotelSearchResult:
         observed_at = datetime.now(UTC)
@@ -87,6 +119,14 @@ class PlaywrightHotelAdapter:
                 timeout=self.settings.scraper_timeout_seconds * 1000,
             )
             await page.wait_for_timeout(7000)
+            if self.source == HotelSourceName.TRIP:
+                try:
+                    await self._run_interactive_search(page, criteria)
+                except Exception as exc:
+                    logger.warning("trip.ir interactive hotel search failed: %s", exc)
+                else:
+                    if validate_hotel_source_url(self.source, page.url):
+                        search_url = page.url
             cards = await page.locator(
                 "[data-testid*='hotel'], [class*='hotel-card'], [class*='hotel-item'], "
                 "[class*='accommodation-card'], .hotel-result, article"

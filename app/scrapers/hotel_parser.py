@@ -22,6 +22,29 @@ from app.scrapers.text_utils import text as _text
 
 STAR_PATTERN = re.compile(r"(\d(?:\.\d)?)\s*(?:ستاره|star)", re.IGNORECASE)
 
+# Some sites (confirmed: Snapptrip) report prices in Rial with no explicit currency
+# field on the hotel object; everything else here defaults to Toman as elsewhere in
+# the codebase.
+DEFAULT_CURRENCY_BY_SOURCE = {HotelSourceName.SNAPPTRIP: "IRR"}
+
+
+def _cheapest_bundle_price(mapped: dict[str, Any]) -> Any:
+    bundles = _first(mapped, ["bundles", "rooms", "offers"])
+    if not isinstance(bundles, list):
+        return None
+    best: Any = None
+    for bundle in bundles:
+        if not isinstance(bundle, dict):
+            continue
+        bundle_mapped = _key_map(bundle)
+        price = _first(bundle_mapped, ["finalPrice", "discountedPrice", "price"])
+        price_decimal = _decimal(price)
+        if price_decimal is None:
+            continue
+        if best is None or price_decimal < _decimal(best):
+            best = price
+    return best
+
 
 def _card_is_unavailable(card: dict[str, Any]) -> bool:
     return bool(card.get("unavailable")) or _contains_unavailable_status(card.get("text"))
@@ -173,14 +196,19 @@ class GenericHotelParser:
                 "hotelname",
                 "name",
                 "stars",
+                "star",
                 "starrating",
                 "price",
                 "pricepernight",
                 "totalprice",
                 "address",
+                "bundles",
             }
             has_name = bool(_first(mapped, ["hotelName", "name", "title"]))
-            has_price = bool(_first(mapped, ["price", "pricePerNight", "totalPrice", "amount"]))
+            has_price = bool(
+                _first(mapped, ["price", "pricePerNight", "totalPrice", "amount"])
+                or _cheapest_bundle_price(mapped)
+            )
             if has_name and has_price and len(hotel_markers.intersection(mapped)) >= 2:
                 found.append(value)
             for item in value.values():
@@ -195,22 +223,27 @@ class GenericHotelParser:
         hotel_name = _text(_first(mapped, ["hotelName", "name", "title"]))
         if not hotel_name:
             return None
-        amount = _decimal(
-            _first(mapped, ["totalPrice", "pricePerNight", "price", "amount", "displayPrice"])
+        flat_amount = _first(
+            mapped, ["totalPrice", "pricePerNight", "price", "amount", "displayPrice"]
         )
+        bundle_amount = _cheapest_bundle_price(mapped) if flat_amount is None else None
+        amount = _decimal(flat_amount if flat_amount is not None else bundle_amount)
         if amount is None:
             return None
+        default_currency = DEFAULT_CURRENCY_BY_SOURCE.get(self.source, "IRT")
         currency_raw = (
-            _text(_first(mapped, ["currency", "currencyCode", "priceUnit"])) or "IRT"
+            _text(_first(mapped, ["currency", "currencyCode", "priceUnit"])) or default_currency
         ).upper()
         currency = "IRR" if currency_raw in {"IRR", "RIAL", "ریال"} else "IRT"
         amount_toman = amount / 10 if currency == "IRR" else amount
         price_kind = (
             HotelPriceKind.TOTAL
-            if _first(mapped, ["totalPrice"])
+            if flat_amount is None or _first(mapped, ["totalPrice"])
             else HotelPriceKind.PER_NIGHT
         )
-        star_decimal = _decimal(_first(mapped, ["stars", "starRating", "hotelStars", "rating"]))
+        star_decimal = _decimal(
+            _first(mapped, ["stars", "star", "starRating", "hotelStars", "rating"])
+        )
         star_rating = int(star_decimal) if star_decimal is not None else None
         raw_url = _text(_first(mapped, ["bookingUrl", "deepLink", "url", "link"]))
         url = raw_url or self.search_url
