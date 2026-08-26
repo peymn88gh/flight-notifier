@@ -7,7 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Alert, ResultSnapshot, User, utc_now
-from app.domain.types import AlertCriteria, AlertStatus
+from app.domain.types import AlertCriteria, AlertKind, AlertStatus, HotelCriteria
 
 
 class UserRepository:
@@ -63,10 +63,17 @@ class AlertRepository:
             select(User.id).where(User.id == user_id).with_for_update()
         )
 
-    async def create(self, user: User, criteria: AlertCriteria, expires_at: datetime) -> Alert:
+    async def create(
+        self,
+        user: User,
+        criteria: AlertCriteria | HotelCriteria,
+        expires_at: datetime,
+        kind: AlertKind = AlertKind.FLIGHT,
+    ) -> Alert:
         now = utc_now()
         alert = Alert(
             user_id=user.id,
+            kind=kind.value,
             status=AlertStatus.ACTIVE.value,
             criteria=criteria.model_dump(mode="json"),
             expires_at=expires_at,
@@ -82,10 +89,11 @@ class AlertRepository:
             select(Alert).where(Alert.id == alert_id, Alert.user_id == user_id)
         )
 
-    async def list_for_user(self, user_id: uuid.UUID) -> list[Alert]:
-        rows = await self.session.scalars(
-            select(Alert).where(Alert.user_id == user_id).order_by(Alert.created_at.desc())
-        )
+    async def list_for_user(self, user_id: uuid.UUID, kind: AlertKind | None = None) -> list[Alert]:
+        query = select(Alert).where(Alert.user_id == user_id)
+        if kind is not None:
+            query = query.where(Alert.kind == kind.value)
+        rows = await self.session.scalars(query.order_by(Alert.created_at.desc()))
         return list(rows)
 
     async def active_count(self, user_id: uuid.UUID) -> int:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, time
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -14,13 +14,16 @@ from app.api.schemas import (
     AlertCreate,
     AlertResponse,
     HealthResponse,
+    HotelAlertCreate,
+    HotelAlertResponse,
+    HotelDestinationResponse,
     LocationResponse,
     SessionResponse,
 )
 from app.bot.runtime import get_bot, get_dispatcher
 from app.core.phones import redact_phone
 from app.db.repositories import AlertRepository
-from app.domain.types import AlertCriteria, AlertStatus
+from app.domain.types import AlertCriteria, AlertKind, AlertStatus, HotelCriteria
 from app.services.queue import enqueue_alert
 
 router = APIRouter()
@@ -39,10 +42,32 @@ def _alert_response(alert) -> AlertResponse:
     )
 
 
+def _hotel_alert_response(alert) -> HotelAlertResponse:
+    return HotelAlertResponse(
+        id=alert.id,
+        status=AlertStatus(alert.status),
+        criteria=HotelCriteria.model_validate(alert.criteria),
+        expires_at=alert.expires_at,
+        next_run_at=alert.next_run_at,
+        created_at=alert.created_at,
+        last_run_at=alert.last_run_at,
+        run_count=alert.run_count,
+    )
+
+
 def _expires_at(criteria: AlertCriteria) -> datetime:
     local = datetime.combine(
         criteria.outbound_dates.end,
         criteria.outbound_times.end,
+        tzinfo=ZoneInfo(criteria.timezone),
+    )
+    return local.astimezone(UTC)
+
+
+def _hotel_expires_at(criteria: HotelCriteria) -> datetime:
+    local = datetime.combine(
+        criteria.checkin_dates.end,
+        time(23, 59),
         tzinfo=ZoneInfo(criteria.timezone),
     )
     return local.astimezone(UTC)
@@ -87,6 +112,32 @@ async def locations(q: str = "") -> list[LocationResponse]:
     return [LocationResponse.model_validate(item) for item in values[:30]]
 
 
+@router.get(
+    "/api/hotel-destinations", response_model=list[HotelDestinationResponse], tags=["hotels"]
+)
+async def hotel_destinations(q: str = "") -> list[HotelDestinationResponse]:
+    path = Path(__file__).resolve().parent.parent / "data" / "hotel_destinations.json"
+    values = json.loads(path.read_text(encoding="utf-8"))
+    needle = q.strip().casefold()
+    if needle:
+        values = [
+            item
+            for item in values
+            if needle
+            in " ".join(
+                [
+                    item["code"],
+                    item["city_fa"],
+                    item["city_en"],
+                    item["country_fa"],
+                    item["country_en"],
+                    *item.get("aliases", []),
+                ]
+            ).casefold()
+        ]
+    return [HotelDestinationResponse.model_validate(item) for item in values[:30]]
+
+
 @router.post(
     "/api/alerts",
     response_model=AlertResponse,
@@ -117,14 +168,14 @@ async def create_alert(
     if await repository.created_today_count(user.id) >= settings.max_alerts_per_day:
         raise HTTPException(status_code=429, detail="Daily alert limit reached")
 
-    alert = await repository.create(user, criteria, _expires_at(criteria))
+    alert = await repository.create(user, criteria, _expires_at(criteria), kind=AlertKind.FLIGHT)
     enqueue_alert(str(alert.id))
     return _alert_response(alert)
 
 
 @router.get("/api/alerts", response_model=list[AlertResponse], tags=["alerts"])
 async def list_alerts(user: CurrentUser, session: DbSession) -> list[AlertResponse]:
-    alerts = await AlertRepository(session).list_for_user(user.id)
+    alerts = await AlertRepository(session).list_for_user(user.id, kind=AlertKind.FLIGHT)
     return [_alert_response(alert) for alert in alerts]
 
 
@@ -140,6 +191,65 @@ async def cancel_alert(
         raise HTTPException(status_code=404, detail="Alert not found")
     await repository.cancel(alert)
     return _alert_response(alert)
+
+
+@router.post(
+    "/api/hotel-alerts",
+    response_model=HotelAlertResponse,
+    status_code=status.HTTP_201_CREATED,
+    tags=["hotels"],
+)
+async def create_hotel_alert(
+    payload: HotelAlertCreate,
+    user: CurrentUser,
+    session: DbSession,
+    settings: AppSettings,
+) -> HotelAlertResponse:
+    criteria = payload.criteria
+    now_local = datetime.now(ZoneInfo(criteria.timezone))
+    if criteria.checkin_dates.start < now_local.date():
+        raise HTTPException(status_code=422, detail="Check-in date range cannot be in the past")
+
+    repository = AlertRepository(session)
+    await repository.lock_user(user.id)
+    if await repository.active_count(user.id) >= settings.max_active_alerts_per_user:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"حداکثر {settings.max_active_alerts_per_user} پایش فعال مجاز است. "
+                "برای ادامه یکی را حذف کنید."
+            ),
+        )
+    if await repository.created_today_count(user.id) >= settings.max_alerts_per_day:
+        raise HTTPException(status_code=429, detail="Daily alert limit reached")
+
+    alert = await repository.create(
+        user, criteria, _hotel_expires_at(criteria), kind=AlertKind.HOTEL
+    )
+    enqueue_alert(str(alert.id))
+    return _hotel_alert_response(alert)
+
+
+@router.get("/api/hotel-alerts", response_model=list[HotelAlertResponse], tags=["hotels"])
+async def list_hotel_alerts(user: CurrentUser, session: DbSession) -> list[HotelAlertResponse]:
+    alerts = await AlertRepository(session).list_for_user(user.id, kind=AlertKind.HOTEL)
+    return [_hotel_alert_response(alert) for alert in alerts]
+
+
+@router.post(
+    "/api/hotel-alerts/{alert_id}/cancel", response_model=HotelAlertResponse, tags=["hotels"]
+)
+async def cancel_hotel_alert(
+    alert_id: uuid.UUID,
+    user: CurrentUser,
+    session: DbSession,
+) -> HotelAlertResponse:
+    repository = AlertRepository(session)
+    alert = await repository.get_for_user(alert_id, user.id)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    await repository.cancel(alert)
+    return _hotel_alert_response(alert)
 
 
 @router.post("/telegram/webhook/{path_secret}", include_in_schema=False)

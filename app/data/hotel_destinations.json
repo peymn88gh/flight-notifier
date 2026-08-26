@@ -1,0 +1,198 @@
+[
+  {
+    "code": "THR",
+    "city_fa": "تهران",
+    "city_en": "Tehran",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "tehran",
+      "trip": "tehran",
+      "respina24": "tehran",
+      "snapptrip": "تهران"
+    }
+  },
+  {
+    "code": "MHD",
+    "city_fa": "مشهد",
+    "city_en": "Mashhad",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "aliases": ["مشهد مقدس"],
+    "slugs": {
+      "alibaba": "mashhad",
+      "trip": "mashhad",
+      "respina24": "mashhad",
+      "snapptrip": "مشهد"
+    }
+  },
+  {
+    "code": "KIH",
+    "city_fa": "کیش",
+    "city_en": "Kish",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "kish",
+      "trip": "kish",
+      "respina24": "kish",
+      "snapptrip": "کیش"
+    }
+  },
+  {
+    "code": "GSM",
+    "city_fa": "قشم",
+    "city_en": "Qeshm",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "qeshm",
+      "trip": "qeshm",
+      "respina24": "qeshm",
+      "snapptrip": "قشم"
+    }
+  },
+  {
+    "code": "SYZ",
+    "city_fa": "شیراز",
+    "city_en": "Shiraz",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "shiraz",
+      "trip": "shiraz",
+      "respina24": "shiraz",
+      "snapptrip": "شیراز"
+    }
+  },
+  {
+    "code": "IFN",
+    "city_fa": "اصفهان",
+    "city_en": "Isfahan",
+    "country_fa": "ایران",
+    "country_en": "Iran",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "isfahan",
+      "trip": "isfahan",
+      "respina24": "isfahan",
+      "snapptrip": "اصفهان"
+    }
+  },
+  {
+    "code": "IST",
+    "city_fa": "استانبول",
+    "city_en": "Istanbul",
+    "country_fa": "ترکیه",
+    "country_en": "Turkey",
+    "aliases": ["استانبول ترکیه"],
+    "slugs": {
+      "alibaba": "tr-istanbul",
+      "trip": "istanbul",
+      "respina24": "istanbul",
+      "snapptrip": "استانبول"
+    }
+  },
+  {
+    "code": "AYT",
+    "city_fa": "آنتالیا",
+    "city_en": "Antalya",
+    "country_fa": "ترکیه",
+    "country_en": "Turkey",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "tr-antalya",
+      "trip": "antalya",
+      "respina24": "antalya",
+      "snapptrip": "آنتالیا"
+    }
+  },
+  {
+    "code": "DXB",
+    "city_fa": "دبی",
+    "city_en": "Dubai",
+    "country_fa": "امارات متحده عربی",
+    "country_en": "United Arab Emirates",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ae-dubai",
+      "trip": "dubai",
+      "respina24": "dubai",
+      "snapptrip": "دبی"
+    }
+  },
+  {
+    "code": "DOH",
+    "city_fa": "دوحه",
+    "city_en": "Doha",
+    "country_fa": "قطر",
+    "country_en": "Qatar",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "qa-doha",
+      "trip": "doha",
+      "respina24": "doha",
+      "snapptrip": "دوحه"
+    }
+  },
+  {
+    "code": "GYD",
+    "city_fa": "باکو",
+    "city_en": "Baku",
+    "country_fa": "آذربایجان",
+    "country_en": "Azerbaijan",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "az-baku",
+      "trip": "baku",
+      "respina24": "baku",
+      "snapptrip": "باکو"
+    }
+  },
+  {
+    "code": "EVN",
+    "city_fa": "ایروان",
+    "city_en": "Yerevan",
+    "country_fa": "ارمنستان",
+    "country_en": "Armenia",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "am-yerevan",
+      "trip": "yerevan",
+      "respina24": "yerevan",
+      "snapptrip": "ایروان"
+    }
+  },
+  {
+    "code": "TBS",
+    "city_fa": "تفلیس",
+    "city_en": "Tbilisi",
+    "country_fa": "گرجستان",
+    "country_en": "Georgia",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "ge-tbilisi",
+      "trip": "tbilisi",
+      "respina24": "tbilisi",
+      "snapptrip": "تفلیس"
+    }
+  },
+  {
+    "code": "MCT",
+    "city_fa": "مسقط",
+    "city_en": "Muscat",
+    "country_fa": "عمان",
+    "country_en": "Oman",
+    "aliases": [],
+    "slugs": {
+      "alibaba": "om-muscat",
+      "trip": "muscat",
+      "respina24": "muscat",
+      "snapptrip": "مسقط"
+    }
+  }
+]

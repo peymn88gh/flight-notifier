@@ -5,7 +5,7 @@ import persian from "react-date-object/calendars/persian";
 import gregorian_en from "react-date-object/locales/gregorian_en";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { api, ApiError } from "./api";
-import type { AlertRecord, Location } from "./types";
+import type { AlertRecord, HotelAlertRecord, HotelDestination, Location } from "./types";
 
 type CalendarMode = "jalali" | "gregorian";
 
@@ -128,8 +128,64 @@ function LocationField({
   );
 }
 
+function HotelDestinationField({
+  label,
+  value,
+  onChange,
+  destinations
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  destinations: HotelDestination[];
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)} required>
+        <option value="">انتخاب شهر</option>
+        {destinations.map((destination) => (
+          <option key={destination.code} value={destination.code}>
+            {destination.city_fa} — {destination.country_fa}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function StepperField({
+  label,
+  value,
+  onChange,
+  min,
+  max
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+  min: number;
+  max: number;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <div className="stepper">
+        <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min}>
+          −
+        </button>
+        <span>{value}</span>
+        <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max}>
+          +
+        </button>
+      </div>
+    </label>
+  );
+}
+
 export default function App() {
   const today = useMemo(isoToday, []);
+  const [activeTab, setActiveTab] = useState<"flight" | "hotel">("flight");
   const [locations, setLocations] = useState<Location[]>([]);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [calendarMode, setCalendarMode] = useState<CalendarMode>("jalali");
@@ -152,10 +208,28 @@ export default function App() {
   const [archivingId, setArchivingId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const [hotelDestinations, setHotelDestinations] = useState<HotelDestination[]>([]);
+  const [hotelAlerts, setHotelAlerts] = useState<HotelAlertRecord[]>([]);
+  const [hotelDestination, setHotelDestination] = useState("");
+  const [hotelFlexible, setHotelFlexible] = useState(false);
+  const [checkinStart, setCheckinStart] = useState(today);
+  const [checkinEnd, setCheckinEnd] = useState(today);
+  const [nights, setNights] = useState(1);
+  const [rooms, setRooms] = useState(1);
+  const [adults, setAdults] = useState(2);
+  const [children, setChildren] = useState(0);
+  const [hotelSubmitting, setHotelSubmitting] = useState(false);
+
   const activeAlerts = useMemo(
     () => alerts.filter((alert) => alert.status === "active"),
     [alerts]
   );
+  const activeHotelAlerts = useMemo(
+    () => hotelAlerts.filter((alert) => alert.status === "active"),
+    [hotelAlerts]
+  );
+  const totalActiveCount = activeAlerts.length + activeHotelAlerts.length;
 
   async function refreshAlerts() {
     const values = await api.alerts();
@@ -163,12 +237,26 @@ export default function App() {
     return values;
   }
 
+  async function refreshHotelAlerts() {
+    const values = await api.hotelAlerts();
+    setHotelAlerts(values);
+    return values;
+  }
+
   useEffect(() => {
-    Promise.all([api.session(), api.locations(), api.alerts()])
-      .then(([sessionValue, locationValues, alertValues]) => {
+    Promise.all([
+      api.session(),
+      api.locations(),
+      api.alerts(),
+      api.hotelDestinations(),
+      api.hotelAlerts()
+    ])
+      .then(([sessionValue, locationValues, alertValues, destinationValues, hotelAlertValues]) => {
         setMaxActiveAlerts(sessionValue.max_active_alerts);
         setLocations(locationValues);
         setAlerts(alertValues);
+        setHotelDestinations(destinationValues);
+        setHotelAlerts(hotelAlertValues);
       })
       .catch((reason: Error) => setError(reason.message))
       .finally(() => setLoading(false));
@@ -199,7 +287,7 @@ export default function App() {
       setError("مبدأ و مقصد باید متفاوت باشند.");
       return;
     }
-    if (activeAlerts.length >= maxActiveAlerts) {
+    if (totalActiveCount >= maxActiveAlerts) {
       setLimitDialogOpen(true);
       window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("warning");
       return;
@@ -252,7 +340,76 @@ export default function App() {
     try {
       await api.cancelAlert(id);
       const values = await refreshAlerts();
-      if (values.filter((alert) => alert.status === "active").length < maxActiveAlerts) {
+      const activeCount = values.filter((alert) => alert.status === "active").length;
+      if (activeCount + activeHotelAlerts.length < maxActiveAlerts) {
+        setLimitDialogOpen(false);
+      }
+      window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("success");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "حذف پایش ناموفق بود.");
+    } finally {
+      setArchivingId(null);
+    }
+  }
+
+  function updateCheckinStart(value: string) {
+    setCheckinStart(value);
+    if (!hotelFlexible || checkinEnd < value) setCheckinEnd(value);
+  }
+
+  function toggleHotelFlexible(value: boolean) {
+    setHotelFlexible(value);
+    if (!value) setCheckinEnd(checkinStart);
+  }
+
+  async function submitHotel(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    setSuccess("");
+    if (totalActiveCount >= maxActiveAlerts) {
+      setLimitDialogOpen(true);
+      window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("warning");
+      return;
+    }
+    setHotelSubmitting(true);
+    const criteria = {
+      destination: hotelDestination,
+      checkin_dates: {
+        start: toAsciiDigits(checkinStart),
+        end: toAsciiDigits(hotelFlexible ? checkinEnd : checkinStart)
+      },
+      nights,
+      rooms,
+      occupancy: { adults, children },
+      timezone: "Asia/Tehran"
+    };
+    try {
+      await api.createHotelAlert(criteria);
+      await refreshHotelAlerts();
+      setSuccess("پایش هتل ساخته شد.");
+      window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("success");
+    } catch (reason) {
+      if (reason instanceof ApiError && reason.status === 429) {
+        await refreshHotelAlerts().catch(() => undefined);
+        setLimitDialogOpen(true);
+        window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("warning");
+        return;
+      }
+      setError(reason instanceof Error ? reason.message : "ثبت پایش هتل ناموفق بود.");
+      window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("error");
+    } finally {
+      setHotelSubmitting(false);
+    }
+  }
+
+  async function archiveHotelAlert(id: string) {
+    setError("");
+    setArchivingId(id);
+    try {
+      await api.cancelHotelAlert(id);
+      const values = await refreshHotelAlerts();
+      const activeCount = values.filter((alert) => alert.status === "active").length;
+      if (activeCount + activeAlerts.length < maxActiveAlerts) {
         setLimitDialogOpen(false);
       }
       window.Telegram?.WebApp.HapticFeedback?.notificationOccurred("success");
@@ -275,12 +432,18 @@ export default function App() {
     <main className="shell">
       <header className="hero">
         <div className="plane-mark"><PlaneIcon /></div>
-        <h1>پایش پرواز</h1>
+        <h1>پایش سفر</h1>
       </header>
+
+      <div className="segmented" aria-label="نوع پایش">
+        <button type="button" className={activeTab === "flight" ? "selected" : ""} onClick={() => setActiveTab("flight")}>پرواز</button>
+        <button type="button" className={activeTab === "hotel" ? "selected" : ""} onClick={() => setActiveTab("hotel")}>هتل</button>
+      </div>
 
       {error && <div className="notice error" role="alert">{error}</div>}
       {success && <div className="notice success" role="status">{success}</div>}
 
+      {activeTab === "flight" && (
       <form className="card form-card" onSubmit={submit}>
         <div className="segmented" aria-label="نوع سفر">
           <button type="button" className={tripType === "one_way" ? "selected" : ""} onClick={() => setTripType("one_way")}>یک‌طرفه</button>
@@ -325,12 +488,51 @@ export default function App() {
           {submitting ? <PlaneLoader compact /> : "شروع پایش پرواز"}
         </button>
       </form>
+      )}
 
-      {activeAlerts.length > 0 && (
+      {activeTab === "hotel" && (
+      <form className="card form-card" onSubmit={submitHotel}>
+        <HotelDestinationField
+          label="مقصد"
+          value={hotelDestination}
+          onChange={setHotelDestination}
+          destinations={hotelDestinations}
+        />
+
+        <div className="section-heading">
+          <h2>تاریخ ورود</h2>
+          <button type="button" className="calendar-toggle" onClick={() => setCalendarMode(calendarMode === "jalali" ? "gregorian" : "jalali")}>
+            {calendarMode === "jalali" ? "نمایش میلادی" : "نمایش شمسی"}
+          </button>
+        </div>
+        <label className="toggle-row">
+          <input type="checkbox" checked={hotelFlexible} onChange={(event) => toggleHotelFlexible(event.target.checked)} />
+          <span>تاریخ ورود منعطف است</span>
+        </label>
+        <section className="grid two">
+          <DateField label={hotelFlexible ? "از تاریخ" : "تاریخ ورود"} value={checkinStart} onChange={updateCheckinStart} mode={calendarMode} />
+          {hotelFlexible && <DateField label="تا تاریخ" value={checkinEnd} onChange={setCheckinEnd} mode={calendarMode} />}
+          <StepperField label="تعداد شب" value={nights} onChange={setNights} min={1} max={30} />
+          <StepperField label="تعداد اتاق" value={rooms} onChange={setRooms} min={1} max={4} />
+        </section>
+
+        <div className="section-heading"><h2>مسافران</h2></div>
+        <section className="grid two">
+          <StepperField label="بزرگسال" value={adults} onChange={setAdults} min={1} max={6} />
+          <StepperField label="کودک" value={children} onChange={setChildren} min={0} max={4} />
+        </section>
+
+        <button className="primary" type="submit" disabled={hotelSubmitting || !hotelDestination}>
+          {hotelSubmitting ? <PlaneLoader compact /> : "شروع پایش هتل"}
+        </button>
+      </form>
+      )}
+
+      {activeTab === "flight" && activeAlerts.length > 0 && (
         <section className="card alerts-card">
           <div className="section-heading">
             <h2>پایش‌های من</h2>
-            <span className="counter">{activeAlerts.length} از {maxActiveAlerts}</span>
+            <span className="counter">{totalActiveCount} از {maxActiveAlerts}</span>
           </div>
           {activeAlerts.map((alert) => (
             <div className="alert-entry" key={alert.id}>
@@ -344,6 +546,33 @@ export default function App() {
                   type="button"
                   disabled={archivingId === alert.id}
                   onClick={() => archiveAlert(alert.id)}
+                >
+                  {archivingId === alert.id ? <PlaneLoader compact /> : "حذف"}
+                </button>
+              </article>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {activeTab === "hotel" && activeHotelAlerts.length > 0 && (
+        <section className="card alerts-card">
+          <div className="section-heading">
+            <h2>پایش‌های من</h2>
+            <span className="counter">{totalActiveCount} از {maxActiveAlerts}</span>
+          </div>
+          {activeHotelAlerts.map((alert) => (
+            <div className="alert-entry" key={alert.id}>
+              <article className="alert-row">
+                <div>
+                  <strong>{alert.criteria.destination}</strong>
+                  <small>{alert.criteria.checkin_dates.start} تا {alert.criteria.checkin_dates.end} · {alert.criteria.nights} شب</small>
+                </div>
+                <button
+                  className="delete-alert"
+                  type="button"
+                  disabled={archivingId === alert.id}
+                  onClick={() => archiveHotelAlert(alert.id)}
                 >
                   {archivingId === alert.id ? <PlaneLoader compact /> : "حذف"}
                 </button>
@@ -370,7 +599,7 @@ export default function App() {
               ×
             </button>
             <div className="dialog-plane"><PlaneIcon /></div>
-            <h2 id="limit-dialog-title">حداکثر دو پایش فعال</h2>
+            <h2 id="limit-dialog-title">حداکثر {maxActiveAlerts} پایش فعال</h2>
             <p>برای ساخت پایش جدید، ابتدا یکی از پایش‌های فعال را حذف کنید.</p>
             <div className="dialog-alerts">
               {activeAlerts.map((alert) => (
@@ -383,6 +612,21 @@ export default function App() {
                     type="button"
                     disabled={archivingId === alert.id}
                     onClick={() => archiveAlert(alert.id)}
+                  >
+                    {archivingId === alert.id ? <PlaneLoader compact /> : "حذف"}
+                  </button>
+                </div>
+              ))}
+              {activeHotelAlerts.map((alert) => (
+                <div className="dialog-alert" key={alert.id}>
+                  <span>
+                    <strong>🏨 {alert.criteria.destination}</strong>
+                    <small>{alert.criteria.checkin_dates.start}</small>
+                  </span>
+                  <button
+                    type="button"
+                    disabled={archivingId === alert.id}
+                    onClick={() => archiveHotelAlert(alert.id)}
                   >
                     {archivingId === alert.id ? <PlaneLoader compact /> : "حذف"}
                   </button>

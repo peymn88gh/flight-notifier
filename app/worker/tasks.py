@@ -9,14 +9,23 @@ from aiogram.exceptions import TelegramAPIError
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.bot.formatting import render_snapshot_page
+from app.bot.formatting import render_hotel_snapshot_page, render_snapshot_page
 from app.bot.runtime import get_bot
 from app.core.config import get_settings
 from app.db.base import SessionFactory
 from app.db.models import Alert, ResultSnapshot, ScrapeRun, utc_now
-from app.domain.types import AlertCriteria, AlertStatus, NormalizedItinerary
+from app.domain.types import (
+    AlertCriteria,
+    AlertKind,
+    AlertStatus,
+    HotelCriteria,
+    NormalizedHotel,
+    NormalizedItinerary,
+)
 from app.scrapers import ScraperManager
-from app.services.results import reconcile_offer_states, snapshot_digest, snapshot_payload
+from app.scrapers.hotel_manager import HotelScraperManager
+from app.services import hotel_results
+from app.services import results as flight_results
 from app.worker.celery_app import celery_app
 
 settings = get_settings()
@@ -59,19 +68,34 @@ async def _dispatch_due_alerts() -> int:
 async def _notify(snapshot: ResultSnapshot, alert: Alert) -> None:
     if not alert.user.telegram_chat_id:
         return
-    itineraries = [
-        NormalizedItinerary.model_validate(item)
-        for item in snapshot.result_payload.get("itineraries", [])
-    ]
-    text, markup = render_snapshot_page(
-        snapshot_id=snapshot.id,
-        alert_id=alert.id,
-        itineraries=itineraries,
-        page=0,
-        change_summary=snapshot.change_summary,
-        observed_at=snapshot.created_at,
-        source_status=snapshot.result_payload.get("source_status", {}),
-    )
+    if AlertKind(alert.kind) is AlertKind.HOTEL:
+        hotels = [
+            NormalizedHotel.model_validate(item)
+            for item in snapshot.result_payload.get("hotels", [])
+        ]
+        text, markup = render_hotel_snapshot_page(
+            snapshot_id=snapshot.id,
+            alert_id=alert.id,
+            hotels=hotels,
+            page=0,
+            change_summary=snapshot.change_summary,
+            observed_at=snapshot.created_at,
+            source_status=snapshot.result_payload.get("source_status", {}),
+        )
+    else:
+        itineraries = [
+            NormalizedItinerary.model_validate(item)
+            for item in snapshot.result_payload.get("itineraries", [])
+        ]
+        text, markup = render_snapshot_page(
+            snapshot_id=snapshot.id,
+            alert_id=alert.id,
+            itineraries=itineraries,
+            page=0,
+            change_summary=snapshot.change_summary,
+            observed_at=snapshot.created_at,
+            source_status=snapshot.result_payload.get("source_status", {}),
+        )
     message = await get_bot().send_message(
         chat_id=alert.user.telegram_chat_id,
         text=text,
@@ -94,11 +118,13 @@ async def _expire(alert: Alert) -> None:
             stored.status = AlertStatus.EXPIRED.value
             await session.commit()
     if chat_id:
+        message = (
+            "The check-in date window has passed. Monitoring stopped automatically."
+            if AlertKind(alert.kind) is AlertKind.HOTEL
+            else "The outbound time window has passed. Monitoring stopped automatically."
+        )
         try:
-            await get_bot().send_message(
-                chat_id,
-                "The outbound time window has passed. Monitoring stopped automatically.",
-            )
+            await get_bot().send_message(chat_id, message)
         except (TelegramAPIError, RuntimeError):
             pass
 
@@ -118,8 +144,19 @@ async def _process_alert(alert_id: str) -> None:
     if alert.expires_at <= utc_now():
         await _expire(alert)
         return
-    criteria = AlertCriteria.model_validate(alert.criteria)
-    batch = await ScraperManager(settings).search(criteria)
+    kind = AlertKind(alert.kind)
+    if kind is AlertKind.HOTEL:
+        hotel_criteria = HotelCriteria.model_validate(alert.criteria)
+        batch = await HotelScraperManager(settings).search(hotel_criteria)
+        reconcile_offer_states = hotel_results.reconcile_offer_states
+        snapshot_digest = hotel_results.snapshot_digest
+        snapshot_payload = hotel_results.snapshot_payload
+    else:
+        flight_criteria = AlertCriteria.model_validate(alert.criteria)
+        batch = await ScraperManager(settings).search(flight_criteria)
+        reconcile_offer_states = flight_results.reconcile_offer_states
+        snapshot_digest = flight_results.snapshot_digest
+        snapshot_payload = flight_results.snapshot_payload
 
     async with SessionFactory() as session:
         alert = await session.scalar(

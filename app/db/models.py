@@ -46,6 +46,9 @@ class Alert(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(
+        String(16), default="flight", server_default="flight", index=True
+    )
     status: Mapped[str] = mapped_column(String(24), default="active", index=True)
     criteria: Mapped[dict[str, Any]] = mapped_column(JSON_TYPE)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)

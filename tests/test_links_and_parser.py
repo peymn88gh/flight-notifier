@@ -117,3 +117,95 @@ def test_parser_rejects_incomplete_round_trip() -> None:
     }
     assert parser.parse_payloads([payload]) == []
 
+
+def _dom_parser() -> GenericFlightParser:
+    search_url = build_search_url(SourceName.TRIP, criteria(), date(2026, 8, 30), None)
+    return GenericFlightParser(
+        SourceName.TRIP,
+        criteria(),
+        date(2026, 8, 30),
+        None,
+        search_url,
+        datetime(2026, 8, 11, tzinfo=UTC),
+    )
+
+
+def test_dom_cards_without_a_specific_link_collapse_to_one() -> None:
+    parser = _dom_parser()
+    cards = [
+        {"text": "Mahan Air\n14:30\n1,500,000 تومان", "url": None, "has_specific_link": False},
+        {"text": "Iran Air\n18:45\n2,000,000 تومان", "url": None, "has_specific_link": False},
+    ]
+    results = parser.parse_dom_cards(cards)
+    assert len(results) == 1
+    assert results[0].outbound.airline == "Mahan Air"
+    assert results[0].offers[0].amount_toman == 1_500_000
+    assert str(results[0].offers[0].booking_url) == parser.search_url
+
+
+def test_dom_cards_with_specific_links_are_not_collapsed() -> None:
+    parser = _dom_parser()
+    cards = [
+        {
+            "text": "Mahan Air\n14:30\n1,500,000 تومان",
+            "url": "https://trip.ir/flight/booking/detail/1",
+            "has_specific_link": True,
+        },
+        {
+            "text": "Iran Air\n18:45\n2,000,000 تومان",
+            "url": "https://trip.ir/flight/booking/detail/2",
+            "has_specific_link": True,
+        },
+    ]
+    results = parser.parse_dom_cards(cards)
+    assert len(results) == 2
+    urls = {str(item.offers[0].booking_url) for item in results}
+    assert urls == {
+        "https://trip.ir/flight/booking/detail/1",
+        "https://trip.ir/flight/booking/detail/2",
+    }
+
+
+def test_dom_cards_exact_duplicates_from_overlapping_selectors_merge() -> None:
+    parser = _dom_parser()
+    duplicate_text = "Mahan Air\n14:30\n1,500,000 تومان"
+    cards = [
+        {"text": duplicate_text, "url": None, "has_specific_link": False},
+        {"text": duplicate_text, "url": None, "has_specific_link": False},
+    ]
+    results = parser.parse_dom_cards(cards)
+    assert len(results) == 1
+    assert len(results[0].offers) == 1
+
+
+def test_dom_card_with_zero_remaining_seats_is_excluded() -> None:
+    parser = _dom_parser()
+    cards = [
+        {
+            "text": "Mahan Air\n14:30\nظرفیت باقیمانده: ۰\n1,500,000 تومان",
+            "url": None,
+            "has_specific_link": False,
+        }
+    ]
+    assert parser.parse_dom_cards(cards) == []
+
+
+def test_payload_status_text_for_sold_out_ticket_is_excluded() -> None:
+    search_url = build_search_url(SourceName.TRIP, criteria(), date(2026, 8, 30), None)
+    parser = GenericFlightParser(
+        SourceName.TRIP,
+        criteria(),
+        date(2026, 8, 30),
+        None,
+        search_url,
+        datetime(2026, 8, 11, tzinfo=UTC),
+    )
+    payload = {
+        "departureDateTime": "2026-08-30T18:20:00+03:30",
+        "airlineName": "Mahan Air",
+        "flightNumber": "W51020",
+        "price": 12_500_000,
+        "statusText": "بلیط موجود نیست",
+    }
+    assert parser.parse_payloads([payload]) == []
+

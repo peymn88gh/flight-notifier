@@ -7,6 +7,15 @@ export type Location = {
   aliases: string[];
 };
 
+export type HotelDestination = {
+  code: string;
+  city_fa: string;
+  city_en: string;
+  country_fa: string;
+  country_en: string;
+  aliases: string[];
+};
+
 export type AlertRecord = {
   id: string;
   status: "active" | "cancelled" | "expired";
@@ -16,6 +25,21 @@ export type AlertRecord = {
     destination: string;
     outbound_dates: { start: string; end: string };
     return_dates?: { start: string; end: string };
+  };
+  expires_at: string;
+  next_run_at: string;
+  created_at: string;
+};
+
+export type HotelAlertRecord = {
+  id: string;
+  status: "active" | "cancelled" | "expired";
+  criteria: {
+    destination: string;
+    checkin_dates: { start: string; end: string };
+    nights: number;
+    rooms: number;
+    occupancy: { adults: number; children: number };
   };
   expires_at: string;
   next_run_at: string;

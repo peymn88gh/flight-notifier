@@ -1,4 +1,4 @@
-import type { AlertRecord, Location } from "./types";
+import type { AlertRecord, HotelAlertRecord, HotelDestination, Location } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -20,7 +20,12 @@ const FIELD_LABELS: Record<string, string> = {
   "criteria.outbound_times.start": "شروع ساعت رفت",
   "criteria.outbound_times.end": "پایان ساعت رفت",
   "criteria.return_times.start": "شروع ساعت برگشت",
-  "criteria.return_times.end": "پایان ساعت برگشت"
+  "criteria.return_times.end": "پایان ساعت برگشت",
+  "criteria.checkin_dates.start": "تاریخ ورود",
+  "criteria.checkin_dates.end": "پایان بازه ورود",
+  "criteria.destination": "مقصد",
+  "criteria.nights": "تعداد شب",
+  "criteria.rooms": "تعداد اتاق"
 };
 
 type ValidationError = {
@@ -88,5 +93,14 @@ export const api = {
       body: JSON.stringify({ criteria })
     }),
   cancelAlert: (id: string) =>
-    request<AlertRecord>(`/api/alerts/${id}/cancel`, { method: "POST" })
+    request<AlertRecord>(`/api/alerts/${id}/cancel`, { method: "POST" }),
+  hotelDestinations: () => request<HotelDestination[]>("/api/hotel-destinations"),
+  hotelAlerts: () => request<HotelAlertRecord[]>("/api/hotel-alerts"),
+  createHotelAlert: (criteria: unknown) =>
+    request<HotelAlertRecord>("/api/hotel-alerts", {
+      method: "POST",
+      body: JSON.stringify({ criteria })
+    }),
+  cancelHotelAlert: (id: string) =>
+    request<HotelAlertRecord>(`/api/hotel-alerts/${id}/cancel`, { method: "POST" })
 };

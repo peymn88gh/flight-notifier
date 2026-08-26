@@ -162,3 +162,78 @@ class SiteSearchResult(BaseModel):
     searched_at: datetime
     search_url: HttpUrl
     error: str | None = None
+
+
+class AlertKind(StrEnum):
+    FLIGHT = "flight"
+    HOTEL = "hotel"
+
+
+class HotelSourceName(StrEnum):
+    ALIBABA = "alibaba"
+    TRIP = "trip"
+    RESPINA24 = "respina24"
+    SNAPPTRIP = "snapptrip"
+
+
+class HotelPriceKind(StrEnum):
+    PER_NIGHT = "per_night"
+    TOTAL = "total"
+    FROM = "from"
+
+
+class RoomOccupancy(BaseModel):
+    adults: int = Field(default=2, ge=1, le=6)
+    children: int = Field(default=0, ge=0, le=4)
+
+
+class HotelCriteria(BaseModel):
+    destination: str = Field(pattern=r"^[A-Z0-9_]{3,16}$")
+    checkin_dates: DateWindow
+    nights: int = Field(default=1, ge=1, le=30)
+    rooms: int = Field(default=1, ge=1, le=4)
+    occupancy: RoomOccupancy = Field(default_factory=RoomOccupancy)
+    timezone: str = "Asia/Tehran"
+
+
+class HotelOffer(BaseModel):
+    source: HotelSourceName
+    hotel_name: str
+    star_rating: int | None = None
+    amount: Decimal | None = None
+    currency: str = "IRT"
+    amount_toman: Decimal | None = None
+    price_kind: HotelPriceKind = HotelPriceKind.PER_NIGHT
+    rooms_remaining: int | None = None
+    booking_url: HttpUrl
+    observed_at: datetime
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NormalizedHotel(BaseModel):
+    hotel_name: str
+    city: str
+    address: str | None = None
+    star_rating: int | None = None
+    checkin: date
+    checkout: date
+    offers: list[HotelOffer] = Field(default_factory=list)
+
+    @property
+    def fingerprint(self) -> str:
+        identity = {
+            "city": self.city,
+            "hotel_name": self.hotel_name.strip().casefold(),
+            "checkin": self.checkin.isoformat(),
+            "checkout": self.checkout.isoformat(),
+        }
+        raw = json.dumps(identity, sort_keys=True, ensure_ascii=True).encode()
+        return hashlib.sha256(raw).hexdigest()[:24]
+
+
+class HotelSearchResult(BaseModel):
+    source: HotelSourceName
+    hotels: list[NormalizedHotel] = Field(default_factory=list)
+    searched_at: datetime
+    search_url: HttpUrl
+    error: str | None = None

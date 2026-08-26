@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
 from datetime import date, datetime, time
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -16,80 +15,14 @@ from app.domain.types import (
     SourceName,
 )
 from app.scrapers.links import validate_source_url
-
-DIGIT_TRANSLATION = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
-UNAVAILABLE_STATUS_TERMS = (
-    "تکمیلظرفیت",
-    "ظرفیتتکمیل",
-    "کنسلشده",
-    "لغوشده",
-    "ناموجود",
-    "فروختهشد",
-    "soldout",
-    "unavailable",
-    "cancelled",
-    "canceled",
-)
-
-
-def _key_map(value: dict[str, Any]) -> dict[str, Any]:
-    return {re.sub(r"[^a-z0-9]", "", str(key).lower()): item for key, item in value.items()}
-
-
-def _first(mapping: dict[str, Any], names: Iterable[str]) -> Any:
-    for name in names:
-        normalized = re.sub(r"[^a-z0-9]", "", name.lower())
-        if normalized in mapping and mapping[normalized] not in (None, ""):
-            return mapping[normalized]
-    return None
-
-
-def _text(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, dict):
-        mapped = _key_map(value)
-        value = _first(mapped, ["name", "displayName", "title", "code"])
-    if value is None:
-        return None
-    return str(value).strip() or None
-
-
-def _decimal(value: Any) -> Decimal | None:
-    if value is None:
-        return None
-    raw = str(value).translate(DIGIT_TRANSLATION)
-    raw = re.sub(r"[^0-9.]", "", raw)
-    if not raw:
-        return None
-    try:
-        return Decimal(raw)
-    except InvalidOperation:
-        return None
-
-
-def _normalized_status(value: Any) -> str:
-    return re.sub(
-        r"[\s_\-\u200c\u200f]+",
-        "",
-        str(value or "").translate(DIGIT_TRANSLATION).casefold(),
-    )
-
-
-def _contains_unavailable_status(value: Any) -> bool:
-    normalized = _normalized_status(value)
-    return any(term in normalized for term in UNAVAILABLE_STATUS_TERMS)
-
-
-def _flag(value: Any) -> bool | None:
-    if isinstance(value, bool):
-        return value
-    normalized = _normalized_status(value)
-    if normalized in {"true", "1", "yes", "بله"}:
-        return True
-    if normalized in {"false", "0", "no", "خیر"}:
-        return False
-    return None
+from app.scrapers.text_utils import DIGIT_TRANSLATION
+from app.scrapers.text_utils import contains_unavailable_status as _contains_unavailable_status
+from app.scrapers.text_utils import decimal as _decimal
+from app.scrapers.text_utils import first as _first
+from app.scrapers.text_utils import flag as _flag
+from app.scrapers.text_utils import key_map as _key_map
+from app.scrapers.text_utils import normalized_status as _normalized_status
+from app.scrapers.text_utils import text as _text
 
 
 def _candidate_is_unavailable(raw: dict[str, Any]) -> bool:
@@ -117,6 +50,19 @@ def _candidate_is_unavailable(raw: dict[str, Any]) -> bool:
 
 def _card_is_unavailable(card: dict[str, Any]) -> bool:
     return bool(card.get("unavailable")) or _contains_unavailable_status(card.get("text"))
+
+
+REMAINING_SEATS_PATTERN = re.compile(
+    r"(?:ظرفیت|صندلی)[^\d]{0,12}(\d{1,3})|(\d{1,3})[^\S\r\n]{0,4}(?:صندلی|ظرفیت)[^\d]{0,12}(باقی|باقیمانده|خالی)"
+)
+
+
+def _remaining_seats_are_zero(text_value: str) -> bool:
+    match = REMAINING_SEATS_PATTERN.search(text_value)
+    if not match:
+        return False
+    digits = match.group(1) or match.group(2)
+    return digits is not None and int(digits) == 0
 
 
 def _datetime(value: Any, fallback_date: date, timezone: ZoneInfo) -> datetime | None:
@@ -180,14 +126,16 @@ class GenericFlightParser:
                     existing.offers.extend(itinerary.offers)
                 else:
                     results[itinerary.fingerprint] = itinerary
-        return list(results.values())
+        return self._collapse_generic_links(list(results.values()))
 
     def parse_dom_cards(self, cards: list[dict[str, Any]]) -> list[NormalizedItinerary]:
-        results: list[NormalizedItinerary] = []
+        results: dict[str, NormalizedItinerary] = {}
         for card in cards:
             if _card_is_unavailable(card):
                 continue
             text_value = str(card.get("text", "")).translate(DIGIT_TRANSLATION)
+            if _remaining_seats_are_zero(text_value):
+                continue
             times = re.findall(r"(?<!\d)([01]?\d|2[0-3]):([0-5]\d)(?!\d)", text_value)
             if not times:
                 continue
@@ -201,8 +149,12 @@ class GenericFlightParser:
             airline = lines[0] if lines else None
             if not airline:
                 continue
-            url = str(card.get("url") or self.search_url)
-            if not validate_source_url(self.source, url):
+            raw_url = card.get("url")
+            url = str(raw_url) if raw_url else self.search_url
+            generic_link = not card.get("has_specific_link") or not validate_source_url(
+                self.source, url
+            )
+            if generic_link:
                 url = self.search_url
             amount_match = re.search(r"([\d,]{4,})\s*(تومان|ریال)", text_value)
             amount = _decimal(amount_match.group(1)) if amount_match else None
@@ -219,23 +171,63 @@ class GenericFlightParser:
             if self.return_date is not None:
                 # A single rendered card is not proof of a complete round trip.
                 continue
-            results.append(
-                NormalizedItinerary(
-                    outbound=leg,
-                    offers=[
-                        SellerOffer(
-                            source=self.source,
-                            amount=amount,
-                            currency=currency,
-                            amount_toman=amount_toman,
-                            price_kind=PriceKind.FROM,
-                            booking_url=url,
-                            observed_at=self.observed_at,
-                        )
-                    ],
-                )
+            itinerary = NormalizedItinerary(
+                outbound=leg,
+                offers=[
+                    SellerOffer(
+                        source=self.source,
+                        amount=amount,
+                        currency=currency,
+                        amount_toman=amount_toman,
+                        price_kind=PriceKind.FROM,
+                        booking_url=url,
+                        observed_at=self.observed_at,
+                        metadata={"generic_link": True} if generic_link else {},
+                    )
+                ],
             )
-        return results
+            existing = results.get(itinerary.fingerprint)
+            if existing:
+                existing.offers.extend(itinerary.offers)
+            else:
+                results[itinerary.fingerprint] = itinerary
+        return self._collapse_generic_links(list(results.values()))
+
+    def _collapse_generic_links(
+        self, itineraries: list[NormalizedItinerary]
+    ) -> list[NormalizedItinerary]:
+        """A booking_url that falls back to the plain search page cannot distinguish one
+        itinerary from another. When several itineraries share that same non-specific link
+        for a source, keep only the cheapest offer instead of repeating an identical link
+        across every result.
+        """
+        best: dict[SourceName, SellerOffer] = {}
+        for itinerary in itineraries:
+            for offer in itinerary.offers:
+                if not offer.metadata.get("generic_link"):
+                    continue
+                current = best.get(offer.source)
+                price = (
+                    offer.amount_toman if offer.amount_toman is not None else Decimal("Infinity")
+                )
+                current_price = (
+                    current.amount_toman if current and current.amount_toman is not None else None
+                )
+                if current is None or price < (
+                    current_price if current_price is not None else Decimal("Infinity")
+                ):
+                    best[offer.source] = offer
+        keep_offer_ids = {id(offer) for offer in best.values()}
+        collapsed: list[NormalizedItinerary] = []
+        for itinerary in itineraries:
+            kept_offers = [
+                offer
+                for offer in itinerary.offers
+                if not offer.metadata.get("generic_link") or id(offer) in keep_offer_ids
+            ]
+            if kept_offers:
+                collapsed.append(itinerary.model_copy(update={"offers": kept_offers}))
+        return collapsed
 
     def exclude_unavailable_dom(
         self,
@@ -408,8 +400,10 @@ class GenericFlightParser:
             if _first(mapped, ["totalPrice", "payableAmount"])
             else PriceKind.FROM
         )
-        url = _text(_first(mapped, ["bookingUrl", "deepLink", "url", "link"])) or self.search_url
-        if not validate_source_url(self.source, url):
+        raw_url = _text(_first(mapped, ["bookingUrl", "deepLink", "url", "link"]))
+        url = raw_url or self.search_url
+        generic_link = not raw_url or not validate_source_url(self.source, url)
+        if generic_link:
             url = self.search_url
         return NormalizedItinerary(
             outbound=outbound,
@@ -426,6 +420,7 @@ class GenericFlightParser:
                     ),
                     booking_url=url,
                     observed_at=self.observed_at,
+                    metadata={"generic_link": True} if generic_link else {},
                 )
             ],
         )

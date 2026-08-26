@@ -19,13 +19,13 @@ from aiogram.types import (
 )
 from sqlalchemy import select
 
-from app.bot.formatting import render_snapshot_page
+from app.bot.formatting import render_hotel_snapshot_page, render_snapshot_page
 from app.core.config import get_settings
 from app.core.phones import normalize_iranian_phone
 from app.db.base import SessionFactory
 from app.db.models import Alert, ResultSnapshot, User
 from app.db.repositories import AlertRepository, UserRepository
-from app.domain.types import NormalizedItinerary
+from app.domain.types import AlertKind, NormalizedHotel, NormalizedItinerary
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -171,19 +171,34 @@ async def paginate(callback: CallbackQuery) -> None:
         if record_user.telegram_user_id != callback.from_user.id:
             await callback.answer("این نتیجه در دسترس نیست", show_alert=True)
             return
-        itineraries = [
-            NormalizedItinerary.model_validate(item)
-            for item in snapshot.result_payload.get("itineraries", [])
-        ]
-        text, markup = render_snapshot_page(
-            snapshot_id=snapshot.id,
-            alert_id=alert.id,
-            itineraries=itineraries,
-            page=page,
-            change_summary=snapshot.change_summary,
-            observed_at=snapshot.created_at,
-            source_status=snapshot.result_payload.get("source_status", {}),
-        )
+        if AlertKind(alert.kind) is AlertKind.HOTEL:
+            hotels = [
+                NormalizedHotel.model_validate(item)
+                for item in snapshot.result_payload.get("hotels", [])
+            ]
+            text, markup = render_hotel_snapshot_page(
+                snapshot_id=snapshot.id,
+                alert_id=alert.id,
+                hotels=hotels,
+                page=page,
+                change_summary=snapshot.change_summary,
+                observed_at=snapshot.created_at,
+                source_status=snapshot.result_payload.get("source_status", {}),
+            )
+        else:
+            itineraries = [
+                NormalizedItinerary.model_validate(item)
+                for item in snapshot.result_payload.get("itineraries", [])
+            ]
+            text, markup = render_snapshot_page(
+                snapshot_id=snapshot.id,
+                alert_id=alert.id,
+                itineraries=itineraries,
+                page=page,
+                change_summary=snapshot.change_summary,
+                observed_at=snapshot.created_at,
+                source_status=snapshot.result_payload.get("source_status", {}),
+            )
     await callback.message.edit_text(text, reply_markup=markup)
     await callback.answer()
 

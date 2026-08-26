@@ -8,20 +8,21 @@ from typing import Any
 from playwright.async_api import Browser, Playwright, async_playwright
 
 from app.core.config import Settings
-from app.domain.types import AlertCriteria, SiteSearchResult, SourceName
-from app.scrapers.links import build_search_url
-from app.scrapers.parser import GenericFlightParser
+from app.domain.types import HotelCriteria, HotelSearchResult, HotelSourceName
+from app.scrapers.hotel_links import build_hotel_search_url
+from app.scrapers.hotel_parser import GenericHotelParser
 
 logger = logging.getLogger(__name__)
 
-class PlaywrightSiteAdapter:
-    def __init__(self, source: SourceName, settings: Settings) -> None:
+
+class PlaywrightHotelAdapter:
+    def __init__(self, source: HotelSourceName, settings: Settings) -> None:
         self.source = source
         self.settings = settings
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
 
-    async def __aenter__(self) -> PlaywrightSiteAdapter:
+    async def __aenter__(self) -> PlaywrightHotelAdapter:
         if not self.settings.scraping_enabled:
             return self
         self._playwright = await async_playwright().start()
@@ -36,16 +37,18 @@ class PlaywrightSiteAdapter:
         if self._playwright:
             await self._playwright.stop()
 
-    async def search(
-        self,
-        criteria: AlertCriteria,
-        outbound_date: date,
-        return_date: date | None,
-    ) -> SiteSearchResult:
-        search_url = build_search_url(self.source, criteria, outbound_date, return_date)
+    async def search(self, criteria: HotelCriteria, checkin: date) -> HotelSearchResult:
         observed_at = datetime.now(UTC)
+        search_url = build_hotel_search_url(self.source, criteria, checkin)
+        if not search_url:
+            return HotelSearchResult(
+                source=self.source,
+                searched_at=observed_at,
+                search_url=f"https://{self.source.value}.invalid/",
+                error=f"No known hotel URL for destination {criteria.destination}",
+            )
         if not self.settings.scraping_enabled:
-            return SiteSearchResult(
+            return HotelSearchResult(
                 source=self.source,
                 searched_at=observed_at,
                 search_url=search_url,
@@ -85,55 +88,47 @@ class PlaywrightSiteAdapter:
             )
             await page.wait_for_timeout(7000)
             cards = await page.locator(
-                "[data-testid*='flight'], [class*='flight-card'], [class*='ticket-card'], "
-                "[class*='available-flight'], .available-card, article"
+                "[data-testid*='hotel'], [class*='hotel-card'], [class*='hotel-item'], "
+                "[class*='accommodation-card'], .hotel-result, article"
             ).evaluate_all(
                 """elements => elements.slice(0, 500).map(element => ({
                   text: element.innerText || '',
                   url: element.querySelector('a[href]')?.href || location.href,
                   has_specific_link: Boolean(element.querySelector('a[href]')),
-                  provider:
-                    element.querySelector('[data-test="provider"] .text-caption')?.textContent ||
-                    element.querySelector('[data-test="provider"]')?.innerText ||
-                    '',
-                  provider_code:
-                    element.querySelector('[data-test="provider"] img')?.getAttribute('alt') || '',
                   unavailable:
                     element.classList.contains('is-disabled') ||
                     element.getAttribute('aria-disabled') === 'true' ||
                     Boolean(element.querySelector(
                       '[class*="disabled" i], [class*="soldout" i], [class*="sold-out" i], ' +
-                      '[class*="unavailable" i], [class*="is-full" i], [class*="capacity-full" i]'
+                      '[class*="unavailable" i], [class*="full" i]'
                     )) ||
                     Boolean(
                       Array.from(element.querySelectorAll('button')).find(button =>
                         button.disabled &&
-                        /انتخاب|رزرو|خرید بلیط|خرید پرواز/.test(button.textContent || '')
+                        /رزرو|انتخاب اتاق|مشاهده اتاق/.test(button.textContent || '')
                       )
                     )
                 }))"""
             )
-            parser = GenericFlightParser(
+            parser = GenericHotelParser(
                 self.source,
                 criteria,
-                outbound_date,
-                return_date,
+                checkin,
                 search_url,
                 observed_at,
             )
-            itineraries = parser.parse_payloads(payloads)
-            itineraries = parser.exclude_unavailable_dom(itineraries, cards)
-            if not itineraries:
-                itineraries = parser.parse_dom_cards(cards)
-            return SiteSearchResult(
+            hotels = parser.parse_payloads(payloads)
+            if not hotels:
+                hotels = parser.parse_dom_cards(cards)
+            return HotelSearchResult(
                 source=self.source,
-                itineraries=itineraries,
+                hotels=hotels,
                 searched_at=observed_at,
                 search_url=search_url,
             )
         except Exception as exc:
-            logger.warning("%s scrape failed: %s", self.source.value, exc)
-            return SiteSearchResult(
+            logger.warning("%s hotel scrape failed: %s", self.source.value, exc)
+            return HotelSearchResult(
                 source=self.source,
                 searched_at=observed_at,
                 search_url=search_url,
@@ -144,5 +139,5 @@ class PlaywrightSiteAdapter:
             await asyncio.sleep(self.settings.scraper_min_delay_seconds)
 
 
-def build_adapters(settings: Settings) -> list[PlaywrightSiteAdapter]:
-    return [PlaywrightSiteAdapter(source, settings) for source in SourceName]
+def build_hotel_adapters(settings: Settings) -> list[PlaywrightHotelAdapter]:
+    return [PlaywrightHotelAdapter(source, settings) for source in HotelSourceName]
