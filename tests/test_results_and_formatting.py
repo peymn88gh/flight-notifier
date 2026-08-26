@@ -3,9 +3,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from app.bot.formatting import render_snapshot_page
+from app.db.models import ResultSnapshot
 from app.domain.types import FlightLeg, NormalizedItinerary, SellerOffer
 from app.scrapers.manager import ScrapeBatch, merge_itineraries
 from app.services.results import snapshot_digest
+from app.worker.tasks import _content_changed
 
 
 def itinerary(source: str, amount: int, hour: int = 18) -> NormalizedItinerary:
@@ -61,6 +63,20 @@ def test_snapshot_digest_ignores_source_health_changes() -> None:
         source_status={"trip": {"ok": False, "results": 1, "errors": ["timeout"]}},
     )
     assert snapshot_digest(healthy) == snapshot_digest(degraded)
+
+
+def test_content_changed_is_true_for_first_ever_snapshot() -> None:
+    assert _content_changed(None, digest="abc") is True
+
+
+def test_content_changed_ignores_offer_state_churn_when_digest_is_stable() -> None:
+    previous = ResultSnapshot(digest="same-digest")
+    assert _content_changed(previous, digest="same-digest") is False
+
+
+def test_content_changed_true_when_digest_differs() -> None:
+    previous = ResultSnapshot(digest="old-digest")
+    assert _content_changed(previous, digest="new-digest") is True
 
 
 def test_pagination_edits_one_message_snapshot() -> None:

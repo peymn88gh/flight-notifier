@@ -31,6 +31,17 @@ from app.worker.celery_app import celery_app
 settings = get_settings()
 
 
+def _content_changed(previous: ResultSnapshot | None, digest: str) -> bool:
+    """Whether the batch differs from the last snapshot the user was actually notified
+    about. Deliberately ignores ChangeSet.has_changes: reconcile_offer_states tracks
+    OfferState rows across every scrape attempt, including ones that never produced a
+    notification and transient misses from ordinary live-scraping flakiness, so an
+    added/removed count can be nonzero even when the notified content is identical.
+    The digest, built only from the current batch, is what the user would actually see.
+    """
+    return previous is None or previous.digest != digest
+
+
 def next_run_time(alert: Alert, now: datetime) -> datetime:
     remaining = alert.expires_at - now
     minutes = (
@@ -172,7 +183,7 @@ async def _process_alert(alert_id: str) -> None:
         )
         changes = await reconcile_offer_states(session, alert.id, batch)
         digest = snapshot_digest(batch)
-        should_notify = previous is None or changes.has_changes or previous.digest != digest
+        should_notify = _content_changed(previous, digest)
         snapshot: ResultSnapshot | None = None
         if should_notify:
             snapshot = ResultSnapshot(
