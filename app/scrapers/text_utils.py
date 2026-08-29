@@ -61,7 +61,9 @@ def text(value: Any) -> str | None:
         return None
     if isinstance(value, dict):
         mapped = key_map(value)
-        value = first(mapped, ["name", "displayName", "title", "code"])
+        # "fa"/"en" last: several of these sites (confirmed: Alibaba) shape bilingual
+        # fields as {"fa": "...", "en": "..."} rather than a name/title/code key.
+        value = first(mapped, ["name", "displayName", "title", "code", "fa", "en"])
     if value is None:
         return None
     return str(value).strip() or None

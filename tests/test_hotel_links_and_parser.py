@@ -134,6 +134,35 @@ def test_parser_excludes_sold_out_hotel() -> None:
     assert parser.parse_payloads([payload]) == []
 
 
+def test_parser_extracts_name_from_bilingual_fa_en_object() -> None:
+    """Confirmed live against Alibaba on 2026-08-29: its hotel objects shape name and
+    address as {"fa": "...", "en": "..."} rather than a name/title/code key, and the
+    candidate was being silently dropped because hotel_name came back None.
+    """
+    search_url = build_hotel_search_url(HotelSourceName.ALIBABA, criteria("IFN"), date(2026, 9, 5))
+    assert search_url is not None
+    parser = GenericHotelParser(
+        HotelSourceName.ALIBABA,
+        criteria("IFN"),
+        date(2026, 9, 5),
+        search_url,
+        datetime(2026, 8, 11, tzinfo=UTC),
+    )
+    payload = {
+        "name": {"fa": "عمارت سهروردی", "en": "Sohrevardi Isfahan"},
+        "star": 4,
+        "address": {"fa": "", "en": ""},
+        "pricePerNight": 64_000_000,
+        "currency": "IRR",
+        "link": "ir-isfahan/isfahan-sohrevardi",
+    }
+    results = parser.parse_payloads([payload])
+    assert len(results) == 1
+    assert results[0].hotel_name == "عمارت سهروردی"
+    assert results[0].star_rating == 4
+    assert results[0].offers[0].amount_toman == Decimal("6400000")
+
+
 def test_parser_extracts_price_from_nested_bundles_and_defaults_to_rial() -> None:
     search_url = build_hotel_search_url(
         HotelSourceName.SNAPPTRIP, criteria(), date(2026, 9, 10)
