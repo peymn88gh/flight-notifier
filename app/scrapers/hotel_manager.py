@@ -80,7 +80,12 @@ class HotelScraperManager:
             return None
 
     async def _store(self, key: str, value: HotelSearchResult) -> None:
-        if value.error:
+        if value.error or not value.hotels:
+            # An empty result is indistinguishable here from a transient scraping
+            # glitch (the site rendered late, a selector missed, etc.). Caching it
+            # would lock in a false "nothing found" for the rest of the TTL, which
+            # for an alert polling on the same cadence means every following poll
+            # replays the same stale miss instead of trying again.
             return
         try:
             ttl = max(240, self.settings.normal_poll_minutes * 60 - 15)

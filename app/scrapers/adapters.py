@@ -83,7 +83,10 @@ class PlaywrightSiteAdapter:
                 wait_until="domcontentloaded",
                 timeout=self.settings.scraper_timeout_seconds * 1000,
             )
-            await page.wait_for_timeout(7000)
+            # See hotel_adapters.py: these sites render a multi-second progressive
+            # loading state before their real listing API resolves, so a short wait
+            # here silently yields zero results rather than an error.
+            await page.wait_for_timeout(25000)
             cards = await page.locator(
                 "[data-testid*='flight'], [class*='flight-card'], [class*='ticket-card'], "
                 "[class*='available-flight'], .available-card, article"

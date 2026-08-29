@@ -118,7 +118,12 @@ class PlaywrightHotelAdapter:
                 wait_until="domcontentloaded",
                 timeout=self.settings.scraper_timeout_seconds * 1000,
             )
-            await page.wait_for_timeout(7000)
+            # These sites render a multi-second progressive loading state (a visible
+            # "searching..." progress bar) before their real listing API resolves;
+            # 2026-08-29 measurement against Snapptrip showed its listing call
+            # reliably firing by ~25s but not by 18s. A short wait here silently
+            # yields zero results rather than an error, since the page loaded fine.
+            await page.wait_for_timeout(25000)
             if self.source == HotelSourceName.TRIP:
                 try:
                     await self._run_interactive_search(page, criteria)
@@ -127,6 +132,7 @@ class PlaywrightHotelAdapter:
                 else:
                     if validate_hotel_source_url(self.source, page.url):
                         search_url = page.url
+                        await page.wait_for_timeout(10000)
             cards = await page.locator(
                 "[data-testid*='hotel'], [class*='hotel-card'], [class*='hotel-item'], "
                 "[class*='accommodation-card'], .hotel-result, article"
